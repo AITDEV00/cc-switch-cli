@@ -25,7 +25,7 @@ The upstream refactor starts at `81df5a08d16dffe8f3b038f2bdea8815e43c4413`
 
 The CLI prepares writes as part of its existing database/config transactions.
 `services/provider/key_field_live.rs` connects those transactions and the CLI
-proxy lifecycle to the upstream patches and `AppWrite`. Claude and Gemini
+proxy lifecycle to the upstream patches and `AppWrite`. Direct Claude and Gemini
 switches defer the database current pointer until publication; pending writes
 recover forward rather than restoring an old live-file snapshot.
 

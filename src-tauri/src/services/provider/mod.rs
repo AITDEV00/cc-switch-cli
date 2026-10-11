@@ -237,7 +237,10 @@ fn sync_provider_to_live_respecting_takeover(
                 AppType::Claude => futures::executor::block_on(
                     state
                         .proxy_service
-                        .sync_claude_live_from_provider_while_proxy_active(provider),
+                        .sync_claude_live_from_provider_while_proxy_active(
+                            provider,
+                            Some(provider),
+                        ),
                 ),
                 AppType::Codex if ownership.live_taken_over => futures::executor::block_on(
                     state
@@ -1221,6 +1224,7 @@ impl ProviderService {
                                         .proxy_service
                                         .sync_claude_live_from_provider_while_proxy_active(
                                             &prepared.action.provider,
+                                            prepared.action.previous_provider.as_ref(),
                                         ),
                                 ),
                                 AppType::Codex => futures::executor::block_on(

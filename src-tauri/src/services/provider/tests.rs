@@ -7896,4 +7896,53 @@ fn key_field_common_edit_preserves_active_proxy_route() {
     assert_eq!(live["env"]["API_TIMEOUT_MS"], "999");
     assert_eq!(live["includeCoAuthoredBy"], false);
     assert_eq!(live["permissions"]["allow"], json!(["Read"]));
+    for env in [json!(null), json!("invalid"), json!([])] {
+        ProviderService::set_common_config_snippet(
+            &state,
+            AppType::Claude,
+            Some(json!({"env":env}).to_string()),
+        )
+        .unwrap();
+        let live: Value = read_json_file(&get_claude_settings_path()).unwrap();
+        assert_eq!(live["env"]["ANTHROPIC_AUTH_TOKEN"], "PROXY_MANAGED");
+        assert_eq!(live["env"]["ANTHROPIC_BASE_URL"], "http://127.0.0.1:15721");
+    }
+}
+
+#[tokio::test]
+#[serial]
+async fn key_field_proxy_update_cleans_removed_exclusive_fields() {
+    let (_home, _env, state) = setup_claude_switch_preview_state(json!({"env":{}}));
+    let mut provider = state
+        .db
+        .get_provider_by_id("p1", "claude")
+        .unwrap()
+        .unwrap();
+    provider.settings_config["env"]["CLAUDE_CODE_DISABLE_ARTIFACT"] = json!("1");
+    ProviderService::update(&state, AppType::Claude, provider.clone()).unwrap();
+    state.db.set_app_proxy_preferred_port("claude", 0).unwrap();
+    state
+        .proxy_service
+        .set_takeover_for_app("claude", true)
+        .await
+        .unwrap();
+    let before: Value = read_json_file(&get_claude_settings_path()).unwrap();
+    assert_eq!(before["env"]["CLAUDE_CODE_DISABLE_ARTIFACT"], "1");
+    provider.settings_config["env"]
+        .as_object_mut()
+        .unwrap()
+        .remove("CLAUDE_CODE_DISABLE_ARTIFACT");
+    ProviderService::update(&state, AppType::Claude, provider).unwrap();
+    let live: Value = read_json_file(&get_claude_settings_path()).unwrap();
+    assert!(live.pointer("/env/CLAUDE_CODE_DISABLE_ARTIFACT").is_none());
+    assert_eq!(live["env"]["ANTHROPIC_AUTH_TOKEN"], "PROXY_MANAGED");
+    state
+        .proxy_service
+        .set_takeover_for_app("claude", false)
+        .await
+        .unwrap();
+    let restored: Value = read_json_file(&get_claude_settings_path()).unwrap();
+    assert!(restored
+        .pointer("/env/CLAUDE_CODE_DISABLE_ARTIFACT")
+        .is_none());
 }

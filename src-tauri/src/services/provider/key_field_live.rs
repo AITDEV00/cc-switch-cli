@@ -100,7 +100,7 @@ pub(super) fn edit_common(
             [top, key, ..] if top == "env" => {
                 !floor::claude_floor_env(key) && !floor::claude_exclusive_env(key)
             }
-            [top, ..] => !floor::claude_floor_top(top),
+            [top, ..] => top != "env" && !floor::claude_floor_top(top),
             _ => false,
         }
     }
