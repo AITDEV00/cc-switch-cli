@@ -242,6 +242,11 @@ fn sync_provider_to_live_respecting_takeover(
                             Some(provider),
                         ),
                 ),
+                AppType::Gemini => futures::executor::block_on(
+                    state
+                        .proxy_service
+                        .sync_gemini_live_from_provider_while_proxy_active(provider),
+                ),
                 AppType::Codex if ownership.live_taken_over => futures::executor::block_on(
                     state
                         .proxy_service
@@ -1227,6 +1232,13 @@ impl ProviderService {
                                             prepared.action.previous_provider.as_ref(),
                                         ),
                                 ),
+                                AppType::Gemini => futures::executor::block_on(
+                                    state
+                                        .proxy_service
+                                        .sync_gemini_live_from_provider_while_proxy_active(
+                                            &prepared.action.provider,
+                                        ),
+                                ),
                                 AppType::Codex => futures::executor::block_on(
                                     state
                                         .proxy_service
@@ -1785,7 +1797,8 @@ impl ProviderService {
             previous_common_config_snippet,
             takeover_active,
             refresh_stale_backup,
-            sync_proxy_live: (takeover_active && matches!(app_type, AppType::Claude))
+            sync_proxy_live: (takeover_active
+                && matches!(app_type, AppType::Claude | AppType::Gemini))
                 || (live_taken_over && matches!(app_type, AppType::Codex)),
             activate_provider: false,
         }))
@@ -2624,7 +2637,7 @@ impl ProviderService {
                     takeover_active: ownership.takeover_active,
                     refresh_stale_backup: ownership.refresh_stale_backup,
                     sync_proxy_live: (ownership.takeover_active
-                        && matches!(&app_type_clone, AppType::Claude))
+                        && matches!(&app_type_clone, AppType::Claude | AppType::Gemini))
                         || (ownership.live_taken_over && matches!(&app_type_clone, AppType::Codex)),
                     activate_provider: false,
                 })

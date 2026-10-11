@@ -1575,11 +1575,17 @@ impl ProxyService {
                         Some(&cached),
                     )?;
                 }
-                AppType::Gemini
-                | AppType::OpenCode
-                | AppType::Hermes
-                | AppType::OpenClaw
-                | AppType::Pi => {}
+                AppType::Gemini => {
+                    let provider_snapshot =
+                        self.build_live_snapshot_from_provider(app_type, provider)?;
+                    cached = Self::merge_live_backup_snapshot(
+                        app_type,
+                        Some(&cached),
+                        None,
+                        provider_snapshot,
+                    )?;
+                }
+                AppType::OpenCode | AppType::Hermes | AppType::OpenClaw | AppType::Pi => {}
             }
             if cached != original {
                 self.save_failover_live_snapshot(app_type, &provider.id, &cached)
@@ -2510,6 +2516,23 @@ impl ProxyService {
             &effective_provider,
         );
         self.write_claude_live_with_previous(&effective_settings, previous)
+    }
+
+    pub async fn sync_gemini_live_from_provider_while_proxy_active(
+        &self,
+        provider: &Provider,
+    ) -> Result<(), String> {
+        let mut live = self.build_live_snapshot_from_provider(&AppType::Gemini, provider)?;
+        let (proxy_url, proxy_codex_base_url) =
+            self.build_proxy_urls_for_app(&AppType::Gemini).await?;
+        self.rewrite_live_for_proxy(
+            &AppType::Gemini,
+            &mut live,
+            &proxy_url,
+            &proxy_codex_base_url,
+            Some(provider),
+        )?;
+        self.write_gemini_live(&live)
     }
 
     pub async fn sync_codex_live_from_provider_while_proxy_active(

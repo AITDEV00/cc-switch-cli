@@ -7946,3 +7946,94 @@ async fn key_field_proxy_update_cleans_removed_exclusive_fields() {
         .pointer("/env/CLAUDE_CODE_DISABLE_ARTIFACT")
         .is_none());
 }
+
+#[tokio::test]
+#[serial]
+async fn key_field_proxy_gemini_update_refreshes_and_removes_model_fields() {
+    let home = TempDir::new().unwrap();
+    let _env = TestEnvGuard::isolated(home.path());
+    std::fs::create_dir_all(crate::gemini_config::get_gemini_dir()).unwrap();
+    let mut provider = Provider::with_id(
+        "p1".into(),
+        "Gemini".into(),
+        json!({
+            "env":{"GEMINI_API_KEY":"key", "GEMINI_MODEL":"old-env"},
+            "config":{"model":{"name":"old-settings"}}
+        }),
+        None,
+    );
+    let mut config = MultiAppConfig::default();
+    config.ensure_app(&AppType::Gemini);
+    let manager = config.get_manager_mut(&AppType::Gemini).unwrap();
+    manager.current = "p1".into();
+    manager.providers.insert("p1".into(), provider.clone());
+    let state = state_from_config(config);
+    state.save().unwrap();
+    ProviderService::sync_current_to_live(&state).unwrap();
+    state.db.set_app_proxy_preferred_port("gemini", 0).unwrap();
+    state
+        .proxy_service
+        .set_takeover_for_app("gemini", true)
+        .await
+        .unwrap();
+    for model in [Some(("new-env", "new-settings")), None] {
+        if let Some((env, settings)) = model {
+            provider.settings_config["env"]["GEMINI_MODEL"] = json!(env);
+            provider.settings_config["config"]["model"]["name"] = json!(settings);
+        } else {
+            provider.settings_config["env"]
+                .as_object_mut()
+                .unwrap()
+                .remove("GEMINI_MODEL");
+            provider.settings_config["config"]["model"]
+                .as_object_mut()
+                .unwrap()
+                .remove("name");
+        }
+        ProviderService::update(&state, AppType::Gemini, provider.clone()).unwrap();
+        let env = crate::gemini_config::read_gemini_env().unwrap();
+        let settings: Value =
+            read_json_file(&crate::gemini_config::get_gemini_settings_path()).unwrap();
+        assert_eq!(
+            env.get("GEMINI_MODEL").map(String::as_str),
+            model.map(|(env, _)| env)
+        );
+        assert_eq!(
+            settings.pointer("/model/name").and_then(Value::as_str),
+            model.map(|(_, settings)| settings)
+        );
+        assert_eq!(
+            env.get("GEMINI_API_KEY").map(String::as_str),
+            Some("PROXY_MANAGED")
+        );
+        assert_eq!(
+            settings.pointer("/security/auth/selectedType"),
+            Some(&json!("gemini-api-key"))
+        );
+        // A cached failover snapshot must not resurrect the pre-edit model.
+        state
+            .proxy_service
+            .hot_switch_provider("gemini", "p1")
+            .await
+            .unwrap();
+        let env = crate::gemini_config::read_gemini_env().unwrap();
+        let settings: Value =
+            read_json_file(&crate::gemini_config::get_gemini_settings_path()).unwrap();
+        assert_eq!(
+            env.get("GEMINI_MODEL").map(String::as_str),
+            model.map(|(env, _)| env)
+        );
+        assert_eq!(
+            settings.pointer("/model/name").and_then(Value::as_str),
+            model.map(|(_, settings)| settings)
+        );
+    }
+    state
+        .proxy_service
+        .set_takeover_for_app("gemini", false)
+        .await
+        .unwrap();
+    let settings: Value =
+        read_json_file(&crate::gemini_config::get_gemini_settings_path()).unwrap();
+    assert!(settings.pointer("/model/name").is_none());
+}
