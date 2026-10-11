@@ -8199,3 +8199,26 @@ fn api88_claude_key_and_pi_catalog_survive_form_save() {
         "https://88api.ai/sign-up?aff=TeNl"
     );
 }
+
+#[test]
+fn api88_selection_clears_previous_additive_template_options() {
+    let mut hermes = ProviderAddFormState::new(AppType::Hermes);
+    hermes.apply_template(template_index_by_label(AppType::Hermes, "Cubence"), &[]);
+    hermes.hermes_rate_limit_delay.set("42");
+    hermes.apply_template(template_index_by_label(AppType::Hermes, "88API"), &[]);
+    assert!(hermes.hermes_rate_limit_delay.is_blank());
+    assert!(hermes.to_provider_json_value()["settingsConfig"]
+        .get("rate_limit_delay")
+        .is_none());
+
+    let mut openclaw = ProviderAddFormState::new(AppType::OpenClaw);
+    openclaw.apply_template(template_index_by_label(AppType::OpenClaw, "Cubence"), &[]);
+    openclaw.openclaw_user_agent = true;
+    openclaw.apply_template(template_index_by_label(AppType::OpenClaw, "88API"), &[]);
+    assert!(!openclaw.openclaw_user_agent);
+    assert!(
+        openclaw.to_provider_json_value()["settingsConfig"]["headers"]
+            .get("User-Agent")
+            .is_none()
+    );
+}

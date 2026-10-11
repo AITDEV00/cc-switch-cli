@@ -718,6 +718,8 @@ impl ProviderAddFormState {
             match app_type {
                 AppType::Claude => self.reset_claude_template_state(),
                 AppType::Codex => self.reset_codex_template_state(),
+                AppType::Hermes => self.hermes_rate_limit_delay.set(""),
+                AppType::OpenClaw => self.openclaw_user_agent = false,
                 _ => {}
             }
             self.extra = serde_json::to_value(&provider).expect("provider serializes");
