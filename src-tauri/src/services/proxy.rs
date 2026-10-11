@@ -3378,7 +3378,11 @@ impl ProxyService {
                     .iter()
                     .map(|(key, value)| (key.clone(), json!(value)))
                     .collect();
-                let mut config = live.get("config").cloned().unwrap_or_else(|| json!({}));
+                let mut config = live
+                    .get("config")
+                    .filter(|value| !value.is_null())
+                    .cloned()
+                    .unwrap_or_else(|| json!({}));
                 target
                     .settings_patch()
                     .apply_to(

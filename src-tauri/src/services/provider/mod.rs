@@ -1206,7 +1206,9 @@ impl ProviderService {
                         .db
                         .get_current_provider(prepared.action.app_type.as_str())?
                         .as_deref()
-                        != Some(prepared.action.provider.id.as_str()))
+                        != Some(prepared.action.provider.id.as_str())
+                        || crate::settings::get_current_provider(&prepared.action.app_type)
+                            .is_some_and(|id| id != prepared.action.provider.id))
                     .then_some(prepared.action.provider.id.as_str());
                     key_field_live::apply(live, Some((&state.db, pointer)))?;
                 } else {
@@ -3865,6 +3867,11 @@ impl ProviderService {
         common_config_snippet: Option<&str>,
         apply_common_config: bool,
     ) -> Result<Value, AppError> {
+        if matches!(app_type, AppType::Claude | AppType::Gemini) {
+            // Restore targets must describe the saved row, not fill omitted
+            // provider fields from the currently active client configuration.
+            return Ok(provider.settings_config.clone());
+        }
         Self::build_effective_live_snapshot(
             app_type,
             provider,

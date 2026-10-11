@@ -8162,3 +8162,117 @@ async fn key_field_proxy_update_keeps_external_invalid_json_on_failure() {
         .await
         .unwrap();
 }
+
+#[test]
+#[serial]
+fn key_field_switch_recovers_device_pointer_when_database_already_selects_target() {
+    use crate::mode::operation::{failpoint, settle, RecoveryOutcome};
+    for app in [AppType::Claude, AppType::Gemini] {
+        let home = TempDir::new().unwrap();
+        let _env = TestEnvGuard::isolated(home.path());
+        std::fs::create_dir_all(crate::config::get_claude_config_dir()).unwrap();
+        std::fs::create_dir_all(crate::gemini_config::get_gemini_dir()).unwrap();
+        let mut config = MultiAppConfig::default();
+        config.ensure_app(&app);
+        let manager = config.get_manager_mut(&app).unwrap();
+        manager.current = "p1".into();
+        for id in ["p1", "p2"] {
+            let settings = match app {
+                AppType::Claude => {
+                    json!({"env":{"ANTHROPIC_AUTH_TOKEN":id, "ANTHROPIC_BASE_URL":"https://example.com"}})
+                }
+                _ => json!({"env":{"GEMINI_API_KEY":id}}),
+            };
+            manager.providers.insert(
+                id.into(),
+                Provider::with_id(id.into(), id.into(), settings, None),
+            );
+        }
+        let state = state_from_config(config);
+        state.save().unwrap();
+        ProviderService::sync_current_to_live(&state).unwrap();
+        state.db.set_current_provider(app.as_str(), "p2").unwrap();
+        crate::settings::set_current_provider(&app, Some("p1")).unwrap();
+        failpoint::crash_at(Some("published:0"));
+        let result = ProviderService::switch(&state, app.clone(), "p2");
+        failpoint::crash_at(None);
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("injected crash at published:0"));
+        assert_eq!(
+            crate::settings::get_current_provider(&app).as_deref(),
+            Some("p1")
+        );
+        assert_eq!(
+            settle(&state.db, app.as_str()).unwrap(),
+            Some(RecoveryOutcome::RolledForward)
+        );
+        assert_eq!(
+            state
+                .db
+                .get_current_provider(app.as_str())
+                .unwrap()
+                .as_deref(),
+            Some("p2")
+        );
+        assert_eq!(
+            crate::settings::get_current_provider(&app).as_deref(),
+            Some("p2")
+        );
+    }
+}
+
+#[tokio::test]
+#[serial]
+async fn key_field_gemini_removing_entire_config_does_not_restore_old_model() {
+    for config_value in [None, Some(json!(null)), Some(json!({}))] {
+        let home = TempDir::new().unwrap();
+        let _env = TestEnvGuard::isolated(home.path());
+        std::fs::create_dir_all(crate::gemini_config::get_gemini_dir()).unwrap();
+        let mut provider = Provider::with_id(
+            "p1".into(),
+            "Gemini".into(),
+            json!({
+                "env":{"GEMINI_API_KEY":"key"},
+                "config":{"model":{"name":"old-model"}}
+            }),
+            None,
+        );
+        let mut config = MultiAppConfig::default();
+        config.ensure_app(&AppType::Gemini);
+        let manager = config.get_manager_mut(&AppType::Gemini).unwrap();
+        manager.current = "p1".into();
+        manager.providers.insert("p1".into(), provider.clone());
+        let state = state_from_config(config);
+        state.save().unwrap();
+        ProviderService::sync_current_to_live(&state).unwrap();
+        state.db.set_app_proxy_preferred_port("gemini", 0).unwrap();
+        state
+            .proxy_service
+            .set_takeover_for_app("gemini", true)
+            .await
+            .unwrap();
+        match config_value {
+            Some(value) => {
+                provider.settings_config["config"] = value;
+            }
+            None => {
+                provider
+                    .settings_config
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("config");
+            }
+        }
+        ProviderService::update(&state, AppType::Gemini, provider).unwrap();
+        state
+            .proxy_service
+            .set_takeover_for_app("gemini", false)
+            .await
+            .unwrap();
+        let settings: Value =
+            read_json_file(&crate::gemini_config::get_gemini_settings_path()).unwrap();
+        assert!(settings.pointer("/model/name").is_none());
+    }
+}

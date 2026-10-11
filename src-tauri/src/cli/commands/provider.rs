@@ -2142,7 +2142,7 @@ fn export_provider(app_type: AppType, id: &str, output: Option<PathBuf>) -> Resu
         }
     }
 
-    let settings_content = ProviderService::build_live_backup_snapshot(
+    let settings_content = ProviderService::build_effective_live_snapshot(
         &app_type,
         &provider,
         common_config_snippet.as_deref(),
