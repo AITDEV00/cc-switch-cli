@@ -162,6 +162,31 @@ impl super::ProviderService {
                 super::GeminiAuthType::GoogleOfficial
             )
     }
+    pub(crate) fn clear_key_fields(
+        db: &crate::Database,
+        app: &crate::app_config::AppType,
+    ) -> Result<(), AppError> {
+        use crate::app_config::AppType;
+        let prepared = match app {
+            AppType::Claude => PreparedLiveWrite::Claude {
+                patch: crate::live::project::claude::direct_patch(None, &Default::default()),
+            },
+            AppType::Gemini => {
+                let empty = crate::live::project::gemini::GeminiProjection::empty();
+                PreparedLiveWrite::Gemini {
+                    env: empty.env_patch(),
+                    settings: empty.settings_patch(),
+                }
+            }
+            _ => {
+                return Err(AppError::Config(
+                    "Unsupported key-field JSON adapter".into(),
+                ))
+            }
+        };
+        apply(&prepared, Some((db, None)))
+    }
+
     /// Adapter for the CLI proxy lifecycle. Its target snapshot supplies only
     /// provider-owned fields; user configuration is always read by the engine.
     pub(crate) fn write_key_fields(

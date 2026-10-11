@@ -43,7 +43,8 @@ keys, so replacing it does not erase unrelated live content.
 
 Claude temporary launches (CLI and TUI) project onto the current live settings
 with the same upstream patch, without replaying saved global snippets or writing
-the real settings file.
+the real settings file. When no direct provider remains during stale recovery,
+Claude/Gemini use upstream empty projections to clear owned fields.
 
 The CLI daemon/start/proxy lifecycle remains the integration boundary; this
 change does not introduce GUI Stack mode, Grok, or Claude Desktop support.
