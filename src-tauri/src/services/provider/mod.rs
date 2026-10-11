@@ -1,3 +1,6 @@
+#[cfg(test)]
+use crate::config::write_json_file;
+mod key_field_live;
 use std::collections::HashSet;
 
 mod claude;
@@ -27,7 +30,6 @@ use crate::app_config::{AppType, MultiAppConfig};
 use crate::codex_config::{get_codex_auth_path, get_codex_config_path};
 use crate::config::{
     delete_file, get_claude_settings_path, get_provider_config_path, read_json_file,
-    write_json_file,
 };
 use crate::error::AppError;
 use crate::provider::{Provider, ProviderMeta, UsageScript};
@@ -235,7 +237,15 @@ fn sync_provider_to_live_respecting_takeover(
                 AppType::Claude => futures::executor::block_on(
                     state
                         .proxy_service
-                        .sync_claude_live_from_provider_while_proxy_active(provider),
+                        .sync_claude_live_from_provider_while_proxy_active(
+                            provider,
+                            Some(provider),
+                        ),
+                ),
+                AppType::Gemini => futures::executor::block_on(
+                    state
+                        .proxy_service
+                        .sync_gemini_live_from_provider_while_proxy_active(provider),
                 ),
                 AppType::Codex if ownership.live_taken_over => futures::executor::block_on(
                     state
@@ -251,10 +261,10 @@ fn sync_provider_to_live_respecting_takeover(
         return Ok(false);
     }
 
-    if matches!(app_type, AppType::Codex) {
+    if !app_type.is_additive_mode() {
         let rows = state
             .db
-            .get_all_providers("codex")?
+            .get_all_providers(app_type.as_str())?
             .into_values()
             .collect::<Vec<_>>();
         let prepared = ProviderService::prepare_live_snapshot(
@@ -263,11 +273,17 @@ fn sync_provider_to_live_respecting_takeover(
             Some(provider),
             common_config_snippet,
             None,
-            true,
+            false,
             &rows,
         )?;
-        if let PreparedLiveWrite::Codex { plan, config } = &prepared {
-            codex_live::apply(plan, config.model_catalog.as_ref(), Some((&state.db, None)))?;
+        match &prepared {
+            PreparedLiveWrite::Codex { plan, config } => {
+                codex_live::apply(plan, config.model_catalog.as_ref(), Some((&state.db, None)))?;
+            }
+            PreparedLiveWrite::Claude { .. } | PreparedLiveWrite::Gemini { .. } => {
+                key_field_live::apply(&prepared, Some((&state.db, None)))?;
+            }
+            _ => ProviderService::apply_prepared_live_snapshot(&prepared)?,
         }
     } else {
         ProviderService::write_live_snapshot(&app_type, provider, common_config_snippet, true)?;
@@ -293,6 +309,31 @@ struct PreparedPostCommitAction {
     effect: PreparedPostCommitEffect,
 }
 
+impl PreparedPostCommitAction {
+    fn uses_live_engine(&self) -> bool {
+        match &self.effect {
+            PreparedPostCommitEffect::Live(live) => matches!(
+                live,
+                PreparedLiveWrite::Codex { .. }
+                    | PreparedLiveWrite::Claude { .. }
+                    | PreparedLiveWrite::Gemini { .. }
+            ),
+            PreparedPostCommitEffect::ProxyLiveBackup { .. } => {
+                matches!(self.action.app_type, AppType::Claude | AppType::Gemini)
+            }
+        }
+    }
+
+    fn has_pending_live_write(&self) -> Result<bool, AppError> {
+        Ok(self.uses_live_engine()
+            && crate::mode::state::pending(
+                &crate::live::engine::DeviceStore::for_device(),
+                self.action.app_type.as_str(),
+            )?
+            .is_some())
+    }
+}
+
 #[derive(Clone)]
 enum PreparedPostCommitEffect {
     Live(PreparedLiveWrite),
@@ -306,19 +347,15 @@ enum PreparedPostCommitEffect {
 enum PreparedLiveWrite {
     Noop,
     Claude {
-        settings: Value,
+        patch: crate::live::patch::json::JsonPatch,
     },
     Codex {
         plan: codex_live::Prepared,
         config: crate::codex_config::PreparedCodexConfigText,
     },
     Gemini {
-        env: std::collections::HashMap<String, String>,
-        settings: Value,
-        auth_type: GeminiAuthType,
-    },
-    GeminiSecurityFlag {
-        auth_type: GeminiAuthType,
+        env: crate::live::patch::dotenv::DotenvPatch,
+        settings: crate::live::patch::json::JsonPatch,
     },
     OpenCode {
         config: Value,
@@ -833,13 +870,17 @@ impl ProviderService {
             None if prepared.as_ref().is_some_and(|prepared| {
                 matches!(
                     prepared.effect,
-                    PreparedPostCommitEffect::Live(PreparedLiveWrite::Codex { .. })
+                    PreparedPostCommitEffect::Live(
+                        PreparedLiveWrite::Codex { .. }
+                            | PreparedLiveWrite::Claude { .. }
+                            | PreparedLiveWrite::Gemini { .. }
+                    )
                 )
             }) =>
             {
                 state.save_config_snapshot_preserving_current_providers(
                     &candidate,
-                    &[AppType::Codex],
+                    &[AppType::Claude, AppType::Codex, AppType::Gemini],
                 )
             }
             None => state.save_config_snapshot(&candidate),
@@ -864,19 +905,11 @@ impl ProviderService {
 
         if let Some(prepared) = prepared {
             if let Err(err) = Self::apply_prepared_post_commit_action(state, &prepared) {
-                if matches!(
-                    prepared.effect,
-                    PreparedPostCommitEffect::Live(PreparedLiveWrite::Codex { .. })
-                ) {
+                if prepared.uses_live_engine() {
                     // Upstream owns live-file recovery. Before publication it
                     // leaves external edits intact; after publication pending
                     // recovers forward. Never restore our older file snapshot.
-                    if crate::mode::state::pending(
-                        &crate::live::engine::DeviceStore::for_device(),
-                        "codex",
-                    )?
-                    .is_some()
-                    {
+                    if prepared.has_pending_live_write()? {
                         state.reload_config_snapshot_from_db()?;
                     } else {
                         match preserved_current_apps {
@@ -973,16 +1006,31 @@ impl ProviderService {
         state: &AppState,
         action: PostCommitAction,
     ) -> Result<PreparedPostCommitAction, AppError> {
-        if matches!(action.app_type, AppType::Codex)
-            && crate::mode::operation::settle(&state.db, "codex")?.is_some()
+        if !action.app_type.is_additive_mode()
+            && crate::mode::operation::settle(&state.db, action.app_type.as_str())?.is_some()
         {
             state.reload_config_snapshot_from_db()?;
             return Err(AppError::Message(
-                "An unfinished Codex write was recovered; please retry with the current state"
+                "An unfinished configuration write was recovered; please retry with the current state"
                     .into(),
             ));
         }
-        let effect = if action.takeover_active {
+        let effect = if action.edit_common_config
+            && action.takeover_active
+            && matches!(action.app_type, AppType::Claude | AppType::Gemini)
+        {
+            // Explicit CLI global edits must not replace an active proxy route.
+            PreparedPostCommitEffect::Live(match action.app_type {
+                AppType::Claude => PreparedLiveWrite::Claude {
+                    patch: Default::default(),
+                },
+                AppType::Gemini => PreparedLiveWrite::Gemini {
+                    env: Default::default(),
+                    settings: Default::default(),
+                },
+                _ => unreachable!(),
+            })
+        } else if action.takeover_active {
             let previous_backup =
                 futures::executor::block_on(state.db.get_live_backup(action.app_type.as_str()))?
                     .map(|backup| backup.original_config);
@@ -1070,12 +1118,41 @@ impl ProviderService {
         let mut action = action;
         if matches!(
             effect,
-            PreparedPostCommitEffect::Live(PreparedLiveWrite::Codex { .. })
+            PreparedPostCommitEffect::Live(
+                PreparedLiveWrite::Codex { .. }
+                    | PreparedLiveWrite::Claude { .. }
+                    | PreparedLiveWrite::Gemini { .. }
+            )
         ) {
             action.refresh_snapshot = false;
             action.sync_mcp = false;
         }
         let mut effect = effect;
+        if action.edit_common_config {
+            if let PreparedPostCommitEffect::Live(live) = &mut effect {
+                let apply = Self::resolve_live_apply_common_config(
+                    &action.app_type,
+                    &action.provider,
+                    action.common_config_snippet.as_deref(),
+                    action
+                        .provider
+                        .meta
+                        .as_ref()
+                        .and_then(|meta| meta.apply_common_config)
+                        .unwrap_or(false),
+                );
+                if matches!(
+                    live,
+                    PreparedLiveWrite::Claude { .. } | PreparedLiveWrite::Gemini { .. }
+                ) {
+                    key_field_live::edit_common(
+                        live,
+                        action.common_config_snippet.as_deref().filter(|_| apply),
+                        action.previous_common_config_snippet.as_deref(),
+                    )?;
+                }
+            }
+        }
         if let PreparedPostCommitEffect::Live(PreparedLiveWrite::Codex { plan, .. }) = &mut effect {
             if action.edit_common_config {
                 let apply = Self::resolve_live_apply_common_config(
@@ -1121,6 +1198,19 @@ impl ProviderService {
                         config.model_catalog.as_ref(),
                         Some((&state.db, Some(prepared.action.provider.id.as_str()))),
                     )?;
+                } else if matches!(
+                    live,
+                    PreparedLiveWrite::Claude { .. } | PreparedLiveWrite::Gemini { .. }
+                ) {
+                    let pointer = (state
+                        .db
+                        .get_current_provider(prepared.action.app_type.as_str())?
+                        .as_deref()
+                        != Some(prepared.action.provider.id.as_str())
+                        || crate::settings::get_current_provider(&prepared.action.app_type)
+                            .is_some_and(|id| id != prepared.action.provider.id))
+                    .then_some(prepared.action.provider.id.as_str());
+                    key_field_live::apply(live, Some((&state.db, pointer)))?;
                 } else {
                     Self::apply_prepared_live_snapshot(live)?;
                 }
@@ -1154,6 +1244,14 @@ impl ProviderService {
                                         .proxy_service
                                         .sync_claude_live_from_provider_while_proxy_active(
                                             &prepared.action.provider,
+                                            prepared.action.previous_provider.as_ref(),
+                                        ),
+                                ),
+                                AppType::Gemini => futures::executor::block_on(
+                                    state
+                                        .proxy_service
+                                        .sync_gemini_live_from_provider_while_proxy_active(
+                                            &prepared.action.provider,
                                         ),
                                 ),
                                 AppType::Codex => futures::executor::block_on(
@@ -1181,6 +1279,11 @@ impl ProviderService {
                 };
 
                 if let Err(sync_error) = sync_result {
+                    // Pending publication belongs to the upstream engine. Keep
+                    // the target row and restore projection for forward recovery.
+                    if prepared.has_pending_live_write()? {
+                        return Err(sync_error);
+                    }
                     let restore_result = match previous_backup {
                         Some(previous_backup) => {
                             futures::executor::block_on(state.db.save_live_backup(
@@ -1241,11 +1344,10 @@ impl ProviderService {
             Ok(())
         };
         if let Err(err) = housekeeping() {
-            if matches!(
-                prepared.effect,
-                PreparedPostCommitEffect::Live(PreparedLiveWrite::Codex { .. })
-            ) {
-                log::warn!("Codex switch committed; CLI post-switch synchronization failed: {err}");
+            if prepared.uses_live_engine() {
+                log::warn!(
+                    "Provider switch committed; CLI post-switch synchronization failed: {err}"
+                );
             } else {
                 return Err(err);
             }
@@ -1708,7 +1810,8 @@ impl ProviderService {
             previous_common_config_snippet,
             takeover_active,
             refresh_stale_backup,
-            sync_proxy_live: (takeover_active && matches!(app_type, AppType::Claude))
+            sync_proxy_live: (takeover_active
+                && matches!(app_type, AppType::Claude | AppType::Gemini))
                 || (live_taken_over && matches!(app_type, AppType::Codex)),
             activate_provider: false,
         }))
@@ -2547,7 +2650,7 @@ impl ProviderService {
                     takeover_active: ownership.takeover_active,
                     refresh_stale_backup: ownership.refresh_stale_backup,
                     sync_proxy_live: (ownership.takeover_active
-                        && matches!(&app_type_clone, AppType::Claude))
+                        && matches!(&app_type_clone, AppType::Claude | AppType::Gemini))
                         || (ownership.live_taken_over && matches!(&app_type_clone, AppType::Codex)),
                     activate_provider: false,
                 })
@@ -3160,14 +3263,12 @@ impl ProviderService {
         }
 
         let backup = Self::capture_live_snapshot(app_type)?;
-        let previous_provider = effective_current_provider
-            .filter(|current_id| matches!(app_type, AppType::Codex) || *current_id != provider_id)
-            .and_then(|current_id| {
-                config
-                    .get_manager(app_type)
-                    .and_then(|manager| manager.providers.get(current_id))
-                    .cloned()
-            });
+        let previous_provider = effective_current_provider.and_then(|current_id| {
+            config
+                .get_manager(app_type)
+                .and_then(|manager| manager.providers.get(current_id))
+                .cloned()
+        });
         let provider = match app_type {
             AppType::Codex => {
                 Self::prepare_switch_codex(config, provider_id, effective_current_provider)?
@@ -3203,8 +3304,8 @@ impl ProviderService {
 
     /// 切换指定应用的供应商
     pub fn switch(state: &AppState, app_type: AppType, provider_id: &str) -> Result<(), AppError> {
-        if matches!(app_type, AppType::Codex)
-            && crate::mode::operation::settle(&state.db, "codex")?.is_some()
+        if !app_type.is_additive_mode()
+            && crate::mode::operation::settle(&state.db, app_type.as_str())?.is_some()
         {
             state.reload_config_snapshot_from_db()?;
         }
@@ -3332,6 +3433,7 @@ impl ProviderService {
                 previous_common_config_snippet,
                 apply_common_config,
                 false,
+                previous_provider,
             ),
             AppType::Gemini => Self::prepare_gemini_live_write(
                 provider,
@@ -3419,9 +3521,7 @@ impl ProviderService {
             PreparedLiveWrite::Noop => Ok(()),
             PreparedLiveWrite::Claude { .. } => Self::apply_claude_live_write(prepared),
             PreparedLiveWrite::Codex { .. } => Self::apply_codex_live_write(prepared),
-            PreparedLiveWrite::Gemini { .. } | PreparedLiveWrite::GeminiSecurityFlag { .. } => {
-                Self::apply_gemini_live_write(prepared)
-            }
+            PreparedLiveWrite::Gemini { .. } => Self::apply_gemini_live_write(prepared),
             PreparedLiveWrite::OpenCode { config } => {
                 crate::opencode_config::write_prepared_config(config)
             }
@@ -3767,6 +3867,11 @@ impl ProviderService {
         common_config_snippet: Option<&str>,
         apply_common_config: bool,
     ) -> Result<Value, AppError> {
+        if matches!(app_type, AppType::Claude | AppType::Gemini) {
+            // Restore targets must describe the saved row, not fill omitted
+            // provider fields from the currently active client configuration.
+            return Ok(provider.settings_config.clone());
+        }
         Self::build_effective_live_snapshot(
             app_type,
             provider,
@@ -3780,6 +3885,28 @@ impl ProviderService {
         app_type: AppType,
         provider: &Provider,
     ) -> Result<Value, AppError> {
+        if matches!(app_type, AppType::Claude) {
+            use crate::live::project::claude::{project_onto, ClaudeProjection};
+            let _guard = crate::live::engine::lock_app("claude");
+            let path = get_claude_settings_path();
+            let live = if path.exists() {
+                read_json_file(&path)?
+            } else {
+                json!({})
+            };
+            let previous = crate::settings::get_effective_current_provider(&state.db, &app_type)?
+                .map(|id| state.db.get_provider_by_id(&id, "claude"))
+                .transpose()?
+                .flatten()
+                .map(|provider| ClaudeProjection::of(&provider.settings_config));
+            return project_onto(
+                &path,
+                &live,
+                previous.as_ref(),
+                &ClaudeProjection::of(&provider.settings_config),
+            )
+            .map_err(AppError::from);
+        }
         let common_config_snippet = {
             let config = state.config.read().map_err(AppError::from)?;
             config.common_config_snippets.get(&app_type).cloned()

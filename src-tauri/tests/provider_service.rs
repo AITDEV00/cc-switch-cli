@@ -1369,6 +1369,7 @@ fn switch_packycode_gemini_updates_security_selected_type() {
     let _guard = lock_test_mutex();
     reset_test_fs();
     let home = ensure_test_home();
+    std::fs::create_dir_all(home.join(".gemini")).expect("initialize Gemini config directory");
 
     let mut config = MultiAppConfig::default();
     {
@@ -1397,7 +1398,7 @@ fn switch_packycode_gemini_updates_security_selected_type() {
     ProviderService::switch(&state, AppType::Gemini, "packy-gemini")
         .expect("switching to PackyCode Gemini should succeed");
 
-    let settings_path = home.join(".cc-switch").join("settings.json");
+    let settings_path = home.join(".gemini").join("settings.json");
     assert!(
         settings_path.exists(),
         "settings.json should exist at {}",
@@ -1421,6 +1422,7 @@ fn packycode_partner_meta_triggers_security_flag_even_without_keywords() {
     let _guard = lock_test_mutex();
     reset_test_fs();
     let home = ensure_test_home();
+    std::fs::create_dir_all(home.join(".gemini")).expect("initialize Gemini config directory");
 
     let mut config = MultiAppConfig::default();
     {
@@ -1451,7 +1453,7 @@ fn packycode_partner_meta_triggers_security_flag_even_without_keywords() {
     ProviderService::switch(&state, AppType::Gemini, "packy-meta")
         .expect("switching to partner meta provider should succeed");
 
-    let settings_path = home.join(".cc-switch").join("settings.json");
+    let settings_path = home.join(".gemini").join("settings.json");
     assert!(
         settings_path.exists(),
         "settings.json should exist at {}",
@@ -1505,7 +1507,7 @@ fn switch_google_official_gemini_sets_oauth_security() {
     ProviderService::switch(&state, AppType::Gemini, "google-official")
         .expect("switching to Google official Gemini should succeed");
 
-    let settings_path = home.join(".cc-switch").join("settings.json");
+    let settings_path = home.join(".gemini").join("settings.json");
     assert!(
         settings_path.exists(),
         "settings.json should exist at {}",
@@ -1519,7 +1521,7 @@ fn switch_google_official_gemini_sets_oauth_security() {
             .pointer("/security/auth/selectedType")
             .and_then(|v| v.as_str()),
         Some("oauth-personal"),
-        "Google official Gemini should set oauth-personal selectedType in app settings"
+        "Google official Gemini should set oauth-personal selectedType in Gemini settings"
     );
 
     let gemini_settings = home.join(".gemini").join("settings.json");
@@ -1620,13 +1622,13 @@ fn switch_gemini_merges_existing_settings_preserving_mcp_servers() {
     );
     assert_eq!(
         value.pointer("/ccSwitchTestKey").and_then(|v| v.as_str()),
-        Some("new"),
-        "switch should merge provider config into existing Gemini settings.json, got: {raw}"
+        None,
+        "switch must not replay user-owned settings from provider rows: {raw}"
     );
 }
 
 #[test]
-fn provider_service_switch_claude_overwrites_live_with_provider_config() {
+fn provider_service_switch_claude_preserves_live_globals() {
     let _guard = lock_test_mutex();
     reset_test_fs();
     let _home = ensure_test_home();
@@ -1685,9 +1687,7 @@ fn provider_service_switch_claude_overwrites_live_with_provider_config() {
     ProviderService::switch(&state, AppType::Claude, "new-provider")
         .expect("switch provider should succeed");
 
-    // Upstream parity (clean-write): settings.json is OVERWRITTEN with the new
-    // provider's effective config. Local-only fields that are neither in the
-    // provider nor the common-config snippet are NOT preserved.
+    // Only provider-owned fields are replaced. Live globals remain authoritative.
     let live_after: serde_json::Value =
         read_json_file(&settings_path).expect("read claude live settings");
     assert_eq!(
@@ -1702,19 +1702,19 @@ fn provider_service_switch_claude_overwrites_live_with_provider_config() {
         live_after
             .get("env")
             .and_then(|env| env.get("LOCAL_ONLY"))
-            .is_none(),
-        "clean overwrite should not retain local-only env keys"
+            .is_some(),
+        "switching preserves user-owned environment keys"
     );
     assert!(
-        live_after.get("workspace").is_none(),
-        "clean overwrite should not retain local-only nested objects"
+        live_after.get("workspace") == legacy_live.get("workspace"),
+        "switching preserves user-owned nested objects"
     );
     assert_eq!(
         live_after
             .pointer("/permissions/allow/0")
             .and_then(|value| value.as_str()),
-        Some("Bash(cargo test:*)"),
-        "live settings.json should add provider-only nested objects"
+        None,
+        "stale permissions from provider rows must not be replayed"
     );
 
     let guard = state
@@ -1731,13 +1731,14 @@ fn provider_service_switch_claude_overwrites_live_with_provider_config() {
         .get("old-provider")
         .expect("legacy provider still exists");
     assert_eq!(
-        legacy_provider.settings_config, legacy_live,
-        "previous provider should receive backfilled live config"
+        legacy_provider.settings_config,
+        json!({"env":{"ANTHROPIC_API_KEY":"stale-key"}}),
+        "switching must not backfill live settings into provider rows"
     );
 }
 
 #[test]
-fn provider_service_switch_claude_overwrites_live_discarding_unstored_edits() {
+fn provider_service_switch_claude_preserves_user_edits() {
     let _guard = lock_test_mutex();
     reset_test_fs();
     let _home = ensure_test_home();
@@ -1811,8 +1812,8 @@ fn provider_service_switch_claude_overwrites_live_discarding_unstored_edits() {
         live_after
             .pointer("/workspace/path")
             .and_then(|value| value.as_str()),
-        Some("/tmp/new-workspace"),
-        "incoming provider workspace should win on a clean write"
+        Some("/tmp/workspace"),
+        "the live workspace is user-owned"
     );
 
     let guard = state
