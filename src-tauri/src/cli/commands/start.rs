@@ -610,7 +610,19 @@ mod tests {
     }
 
     #[test]
-    fn prepare_claude_launch_with_writes_effective_snapshot_from_state() {
+    #[serial_test::serial]
+    fn prepare_claude_launch_preserves_live_globals_without_replaying_saved_snapshots() {
+        let home = TempDir::new().unwrap();
+        let _env = crate::test_support::TestEnvGuard::isolated(home.path());
+        let live_path = crate::config::get_claude_settings_path();
+        let live = json!({
+            "env":{"ANTHROPIC_AUTH_TOKEN":"old", "USER_ENV":"keep"},
+            "permissions":{"allow":["Read"]},
+            "hooks":{"UserPromptSubmit":[]},
+            "includeCoAuthoredBy":false
+        });
+        crate::config::write_json_file(&live_path, &live).unwrap();
+        let live_before = std::fs::read(&live_path).unwrap();
         let temp_dir = TempDir::new().expect("create temp dir");
         let mut config = crate::app_config::MultiAppConfig::default();
         config.ensure_app(&AppType::Claude);
@@ -643,17 +655,19 @@ mod tests {
             &std::fs::read_to_string(&prepared.settings_path).expect("read temp settings"),
         )
         .expect("parse temp settings");
-        let expected = ProviderService::build_effective_live_snapshot_from_state(
-            &state,
-            AppType::Claude,
-            &provider,
-        )
-        .expect("build effective snapshot");
-
+        assert_eq!(written["env"]["ANTHROPIC_AUTH_TOKEN"], "sk-demo");
         assert_eq!(
-            written, expected,
-            "CLI temp launch should write the canonical effective snapshot"
+            written["env"]["ANTHROPIC_BASE_URL"],
+            "https://provider.example"
         );
+        assert_eq!(written["env"]["USER_ENV"], "keep");
+        assert!(written["env"]
+            .get("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC")
+            .is_none());
+        assert_eq!(written["permissions"], live["permissions"]);
+        assert_eq!(written["hooks"], live["hooks"]);
+        assert_eq!(written["includeCoAuthoredBy"], false);
+        assert_eq!(std::fs::read(&live_path).unwrap(), live_before);
     }
 
     #[test]
@@ -674,7 +688,10 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn preview_claude_launch_with_does_not_write_temp_settings() {
+        let home = TempDir::new().unwrap();
+        let _env = crate::test_support::TestEnvGuard::isolated(home.path());
         let temp_dir = TempDir::new().expect("create temp dir");
         let mut config = crate::app_config::MultiAppConfig::default();
         config.ensure_app(&AppType::Claude);

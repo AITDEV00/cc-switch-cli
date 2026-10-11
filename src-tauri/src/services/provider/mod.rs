@@ -3878,6 +3878,28 @@ impl ProviderService {
         app_type: AppType,
         provider: &Provider,
     ) -> Result<Value, AppError> {
+        if matches!(app_type, AppType::Claude) {
+            use crate::live::project::claude::{project_onto, ClaudeProjection};
+            let _guard = crate::live::engine::lock_app("claude");
+            let path = get_claude_settings_path();
+            let live = if path.exists() {
+                read_json_file(&path)?
+            } else {
+                json!({})
+            };
+            let previous = crate::settings::get_effective_current_provider(&state.db, &app_type)?
+                .map(|id| state.db.get_provider_by_id(&id, "claude"))
+                .transpose()?
+                .flatten()
+                .map(|provider| ClaudeProjection::of(&provider.settings_config));
+            return project_onto(
+                &path,
+                &live,
+                previous.as_ref(),
+                &ClaudeProjection::of(&provider.settings_config),
+            )
+            .map_err(AppError::from);
+        }
         let common_config_snippet = {
             let config = state.config.read().map_err(AppError::from)?;
             config.common_config_snippets.get(&app_type).cloned()

@@ -41,6 +41,10 @@ edits are expressed as upstream JSON/dotenv patch operations, like the existing
 Codex TOML adapter. An invalid old snippet cannot establish ownership of live
 keys, so replacing it does not erase unrelated live content.
 
+Claude temporary launches (CLI and TUI) project onto the current live settings
+with the same upstream patch, without replaying saved global snippets or writing
+the real settings file.
+
 The CLI daemon/start/proxy lifecycle remains the integration boundary; this
 change does not introduce GUI Stack mode, Grok, or Claude Desktop support.
 
