@@ -8037,3 +8037,128 @@ async fn key_field_proxy_gemini_update_refreshes_and_removes_model_fields() {
         read_json_file(&crate::gemini_config::get_gemini_settings_path()).unwrap();
     assert!(settings.pointer("/model/name").is_none());
 }
+
+#[tokio::test]
+#[serial]
+async fn key_field_proxy_update_recovers_forward_without_restoring_old_files() {
+    use crate::mode::operation::{failpoint, settle, RecoveryOutcome};
+    let home = TempDir::new().unwrap();
+    let _env = TestEnvGuard::isolated(home.path());
+    std::fs::create_dir_all(crate::gemini_config::get_gemini_dir()).unwrap();
+    let mut provider = Provider::with_id(
+        "p1".into(),
+        "Gemini".into(),
+        json!({
+            "env":{"GEMINI_API_KEY":"key", "GEMINI_MODEL":"old-env"},
+            "config":{"model":{"name":"old-settings"}}
+        }),
+        None,
+    );
+    let mut config = MultiAppConfig::default();
+    config.ensure_app(&AppType::Gemini);
+    let manager = config.get_manager_mut(&AppType::Gemini).unwrap();
+    manager.current = "p1".into();
+    manager.providers.insert("p1".into(), provider.clone());
+    let state = state_from_config(config);
+    state.save().unwrap();
+    ProviderService::sync_current_to_live(&state).unwrap();
+    state.db.set_app_proxy_preferred_port("gemini", 0).unwrap();
+    state
+        .proxy_service
+        .set_takeover_for_app("gemini", true)
+        .await
+        .unwrap();
+    provider.settings_config["env"]["GEMINI_MODEL"] = json!("new-env");
+    provider.settings_config["config"]["model"]["name"] = json!("new-settings");
+    let mut edited = false;
+    failpoint::on_before_publish(Some(Box::new(move |index, path| {
+        if index == 0 && !edited {
+            edited = true;
+            let before = std::fs::read_to_string(path).unwrap();
+            std::fs::write(
+                path,
+                format!("# concurrent user edit\n{before}USER_SETTING=keep\n"),
+            )
+            .unwrap();
+        }
+    })));
+    failpoint::crash_at(Some("published:0"));
+    let result = ProviderService::update(&state, AppType::Gemini, provider);
+    failpoint::crash_at(None);
+    failpoint::on_before_publish(None);
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("injected crash at published:0"));
+    let env_path = crate::gemini_config::get_gemini_env_path();
+    let published_env = std::fs::read_to_string(&env_path).unwrap();
+    assert!(published_env.contains("# concurrent user edit"));
+    assert!(published_env.contains("GEMINI_MODEL=new-env"));
+    assert!(published_env.contains("USER_SETTING=keep"));
+    let saved = state
+        .db
+        .get_provider_by_id("p1", "gemini")
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        saved.settings_config["config"]["model"]["name"],
+        "new-settings"
+    );
+    let backup = state.db.get_live_backup("gemini").await.unwrap().unwrap();
+    let backup: Value = serde_json::from_str(&backup.original_config).unwrap();
+    assert_eq!(backup["config"]["model"]["name"], "new-settings");
+    assert_eq!(
+        settle(&state.db, "gemini").unwrap(),
+        Some(RecoveryOutcome::RolledForward)
+    );
+    assert_eq!(std::fs::read_to_string(&env_path).unwrap(), published_env);
+    let live: Value = read_json_file(&crate::gemini_config::get_gemini_settings_path()).unwrap();
+    assert_eq!(live["model"]["name"], "new-settings");
+    state
+        .proxy_service
+        .set_takeover_for_app("gemini", false)
+        .await
+        .unwrap();
+    let live: Value = read_json_file(&crate::gemini_config::get_gemini_settings_path()).unwrap();
+    assert_eq!(live["model"]["name"], "new-settings");
+    assert!(std::fs::read_to_string(&env_path)
+        .unwrap()
+        .contains("USER_SETTING=keep"));
+}
+
+#[tokio::test]
+#[serial]
+async fn key_field_proxy_update_keeps_external_invalid_json_on_failure() {
+    use crate::mode::operation::failpoint;
+    let (_home, _env, state) = setup_claude_switch_preview_state(json!({"env":{}}));
+    state.db.set_app_proxy_preferred_port("claude", 0).unwrap();
+    state
+        .proxy_service
+        .set_takeover_for_app("claude", true)
+        .await
+        .unwrap();
+    let mut provider = state
+        .db
+        .get_provider_by_id("p1", "claude")
+        .unwrap()
+        .unwrap();
+    provider.settings_config["env"]["ANTHROPIC_DEFAULT_SONNET_MODEL"] = json!("changed-model");
+    failpoint::on_before_publish(Some(Box::new(|_, path| {
+        std::fs::write(path, "{ external edit in progress").unwrap();
+    })));
+    let result = ProviderService::update(&state, AppType::Claude, provider);
+    failpoint::on_before_publish(None);
+    assert!(result.is_err());
+    assert_eq!(
+        std::fs::read_to_string(get_claude_settings_path()).unwrap(),
+        "{ external edit in progress"
+    );
+    // Restore a valid user document only after verifying the failed operation
+    // leaves the concurrent edit intact, so the test server can shut down.
+    write_json_file(&get_claude_settings_path(), &json!({"user":"keep"})).unwrap();
+    state
+        .proxy_service
+        .set_takeover_for_app("claude", false)
+        .await
+        .unwrap();
+}

@@ -309,6 +309,31 @@ struct PreparedPostCommitAction {
     effect: PreparedPostCommitEffect,
 }
 
+impl PreparedPostCommitAction {
+    fn uses_live_engine(&self) -> bool {
+        match &self.effect {
+            PreparedPostCommitEffect::Live(live) => matches!(
+                live,
+                PreparedLiveWrite::Codex { .. }
+                    | PreparedLiveWrite::Claude { .. }
+                    | PreparedLiveWrite::Gemini { .. }
+            ),
+            PreparedPostCommitEffect::ProxyLiveBackup { .. } => {
+                matches!(self.action.app_type, AppType::Claude | AppType::Gemini)
+            }
+        }
+    }
+
+    fn has_pending_live_write(&self) -> Result<bool, AppError> {
+        Ok(self.uses_live_engine()
+            && crate::mode::state::pending(
+                &crate::live::engine::DeviceStore::for_device(),
+                self.action.app_type.as_str(),
+            )?
+            .is_some())
+    }
+}
+
 #[derive(Clone)]
 enum PreparedPostCommitEffect {
     Live(PreparedLiveWrite),
@@ -880,23 +905,11 @@ impl ProviderService {
 
         if let Some(prepared) = prepared {
             if let Err(err) = Self::apply_prepared_post_commit_action(state, &prepared) {
-                if matches!(
-                    prepared.effect,
-                    PreparedPostCommitEffect::Live(
-                        PreparedLiveWrite::Codex { .. }
-                            | PreparedLiveWrite::Claude { .. }
-                            | PreparedLiveWrite::Gemini { .. }
-                    )
-                ) {
+                if prepared.uses_live_engine() {
                     // Upstream owns live-file recovery. Before publication it
                     // leaves external edits intact; after publication pending
                     // recovers forward. Never restore our older file snapshot.
-                    if crate::mode::state::pending(
-                        &crate::live::engine::DeviceStore::for_device(),
-                        prepared.action.app_type.as_str(),
-                    )?
-                    .is_some()
-                    {
+                    if prepared.has_pending_live_write()? {
                         state.reload_config_snapshot_from_db()?;
                     } else {
                         match preserved_current_apps {
@@ -1264,6 +1277,11 @@ impl ProviderService {
                 };
 
                 if let Err(sync_error) = sync_result {
+                    // Pending publication belongs to the upstream engine. Keep
+                    // the target row and restore projection for forward recovery.
+                    if prepared.has_pending_live_write()? {
+                        return Err(sync_error);
+                    }
                     let restore_result = match previous_backup {
                         Some(previous_backup) => {
                             futures::executor::block_on(state.db.save_live_backup(
@@ -1324,14 +1342,7 @@ impl ProviderService {
             Ok(())
         };
         if let Err(err) = housekeeping() {
-            if matches!(
-                prepared.effect,
-                PreparedPostCommitEffect::Live(
-                    PreparedLiveWrite::Codex { .. }
-                        | PreparedLiveWrite::Claude { .. }
-                        | PreparedLiveWrite::Gemini { .. }
-                )
-            ) {
+            if prepared.uses_live_engine() {
                 log::warn!(
                     "Provider switch committed; CLI post-switch synchronization failed: {err}"
                 );

@@ -27,7 +27,9 @@ The CLI prepares writes as part of its existing database/config transactions.
 `services/provider/key_field_live.rs` connects those transactions and the CLI
 proxy lifecycle to the upstream patches and `AppWrite`. Direct Claude and Gemini
 switches defer the database current pointer until publication; pending writes
-recover forward rather than restoring an old live-file snapshot.
+recover forward rather than restoring an old live-file snapshot. Proxy updates
+use the same recovery boundary: once publication is pending, the selected row
+and restore projection remain available for the engine to finish.
 
 Ordinary switch/add/update/sync operations do not replay saved common snippets,
 backfill live globals into provider rows, or re-project MCP just because the
