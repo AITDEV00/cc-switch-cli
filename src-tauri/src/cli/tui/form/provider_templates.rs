@@ -707,6 +707,27 @@ impl ProviderAddFormState {
     }
 
     fn apply_sponsor_preset(&mut self, preset: &SponsorProviderPreset) {
+        if preset.id == "88api" {
+            let app_type = self.app_type.clone();
+            let provider = crate::cli::commands::provider_input::build_provider_template_seed(
+                &app_type,
+                crate::cli::commands::provider_input::ProviderAddTemplate::Api88,
+                &[],
+            )
+            .expect("88API is supported for this application");
+            match app_type {
+                AppType::Claude => self.reset_claude_template_state(),
+                AppType::Codex => self.reset_codex_template_state(),
+                _ => {}
+            }
+            self.extra = serde_json::to_value(&provider).expect("provider serializes");
+            self.name.set(&provider.name);
+            self.website_url.set(preset.website_url);
+            self.notes.set("");
+            populate_form_from_provider(self, &app_type, &provider);
+            return;
+        }
+
         let mut extra = json!({
             "meta": {
                 "isPartner": true,

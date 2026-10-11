@@ -118,16 +118,17 @@ fn provider_add_form_template_labels_follow_explicit_support_matrix() {
             "Custom",
             "Claude Official",
             "Codex",
-            "AICodeMirror",
-            "ClaudeAPI",
+            "88API",
             "PatewayAI",
             "Cubence",
             "OpenModel",
-            "RunAPI",
-            "Qiniu",
-            "FennoAI",
             "PackyCode",
             "DDS",
+            "RunAPI",
+            "AICodeMirror",
+            "ClaudeAPI",
+            "Qiniu",
+            "FennoAI",
             "DeepSeek",
             "Zhipu GLM",
             "Zhipu GLM en",
@@ -146,15 +147,16 @@ fn provider_add_form_template_labels_follow_explicit_support_matrix() {
         vec![
             "Custom",
             "OpenAI Official",
-            "AICodeMirror",
+            "88API",
             "PatewayAI",
             "Cubence",
             "OpenModel",
-            "RunAPI",
-            "Qiniu",
-            "FennoAI",
             "PackyCode",
             "DDS",
+            "RunAPI",
+            "AICodeMirror",
+            "Qiniu",
+            "FennoAI",
             "DeepSeek",
             "Zhipu GLM",
             "Zhipu GLM en",
@@ -173,11 +175,12 @@ fn provider_add_form_template_labels_follow_explicit_support_matrix() {
         vec![
             "Custom",
             "Google OAuth",
-            "AICodeMirror",
+            "88API",
             "Cubence",
             "OpenModel",
-            "Qiniu",
             "PackyCode",
+            "AICodeMirror",
+            "Qiniu",
         ]
     );
 
@@ -186,13 +189,14 @@ fn provider_add_form_template_labels_follow_explicit_support_matrix() {
         opencode_labels,
         vec![
             "Custom",
-            "AICodeMirror",
+            "88API",
             "Cubence",
             "OpenModel",
+            "PackyCode",
             "RunAPI",
+            "AICodeMirror",
             "Qiniu",
             "FennoAI",
-            "PackyCode"
         ]
     );
     assert!(
@@ -205,13 +209,14 @@ fn provider_add_form_template_labels_follow_explicit_support_matrix() {
         hermes_labels,
         vec![
             "Custom",
-            "AICodeMirror",
+            "88API",
             "Cubence",
             "OpenModel",
+            "PackyCode",
             "RunAPI",
+            "AICodeMirror",
             "Qiniu",
             "FennoAI",
-            "PackyCode"
         ]
     );
 
@@ -220,13 +225,14 @@ fn provider_add_form_template_labels_follow_explicit_support_matrix() {
         openclaw_labels,
         vec![
             "Custom",
-            "AICodeMirror",
+            "88API",
             "Cubence",
             "OpenModel",
+            "PackyCode",
             "RunAPI",
+            "AICodeMirror",
             "Qiniu",
             "FennoAI",
-            "PackyCode"
         ]
     );
     assert!(
@@ -251,12 +257,13 @@ fn provider_add_form_pi_exposes_only_the_selected_template_scope() {
             "Xiaomi MiMo Token Plan (China)",
             "OpenCode Go",
             "OpenRouter",
-            "PackyCode",
-            "AICodeMirror",
-            "FennoAI",
-            "RunAPI",
-            "Qiniu",
+            "88API",
             "Cubence",
+            "PackyCode",
+            "RunAPI",
+            "AICodeMirror",
+            "Qiniu",
+            "FennoAI",
         ]
     );
 }
@@ -288,19 +295,16 @@ fn provider_add_form_pi_picker_uses_family_sections() {
             ProviderTemplateRow::Header(_) => None,
         })
         .collect::<Vec<_>>();
-    assert_eq!(items.len(), 16);
+    assert_eq!(items.len(), 17);
     assert_eq!(items[0], (0, "Custom", ProviderTemplateSection::BuiltIn));
     assert_eq!(
         items[9],
         (9, "OpenRouter", ProviderTemplateSection::BuiltIn)
     );
+    assert_eq!(items[10], (10, "88API", ProviderTemplateSection::Sponsors));
     assert_eq!(
-        items[10],
-        (10, "PackyCode", ProviderTemplateSection::Sponsors)
-    );
-    assert_eq!(
-        items[15],
-        (15, "Cubence", ProviderTemplateSection::Sponsors)
+        items[16],
+        (16, "FennoAI", ProviderTemplateSection::Sponsors)
     );
 }
 
@@ -6111,13 +6115,14 @@ fn provider_add_form_opencode_exposes_supported_sponsor_presets() {
         labels,
         vec![
             "Custom",
-            "AICodeMirror",
+            "88API",
             "Cubence",
             "OpenModel",
+            "PackyCode",
             "RunAPI",
+            "AICodeMirror",
             "Qiniu",
             "FennoAI",
-            "PackyCode"
         ]
     );
 }
@@ -6134,13 +6139,14 @@ fn provider_add_form_openclaw_uses_dedicated_template_defs() {
         openclaw_labels,
         vec![
             "Custom",
-            "AICodeMirror",
+            "88API",
             "Cubence",
             "OpenModel",
+            "PackyCode",
             "RunAPI",
+            "AICodeMirror",
             "Qiniu",
             "FennoAI",
-            "PackyCode"
         ]
     );
     assert!(
@@ -8092,5 +8098,104 @@ fn provider_add_form_pi_preserves_raw_native_settings_and_names_a_copy() {
     assert_eq!(
         copy.to_provider_json_value()["settingsConfig"],
         expected_copy
+    );
+}
+
+#[test]
+fn api88_templates_match_cli_and_upstream_model_defaults() {
+    for app in [
+        AppType::Claude,
+        AppType::Codex,
+        AppType::Gemini,
+        AppType::OpenCode,
+        AppType::Hermes,
+        AppType::OpenClaw,
+    ] {
+        let mut form = ProviderAddFormState::new(app.clone());
+        form.apply_template(template_index_by_label(app.clone(), "88API"), &[]);
+        let seed = build_provider_template_seed(&app, ProviderAddTemplate::Api88, &[]).unwrap();
+        // The editor omits blank credential placeholders until a key is entered.
+        fn without_empty_credentials(mut value: Value) -> Value {
+            match &mut value {
+                Value::Object(map) => {
+                    map.retain(|key, v| {
+                        !(v == ""
+                            && matches!(
+                                key.as_str(),
+                                "apiKey"
+                                    | "api_key"
+                                    | "ANTHROPIC_AUTH_TOKEN"
+                                    | "GEMINI_API_KEY"
+                                    | "OPENAI_API_KEY"
+                            ))
+                    });
+                    for v in map.values_mut() {
+                        *v = without_empty_credentials(v.take());
+                    }
+                }
+                Value::Array(items) => {
+                    for v in items {
+                        *v = without_empty_credentials(v.take());
+                    }
+                }
+                _ => {}
+            }
+            value
+        }
+        assert_eq!(
+            without_empty_credentials(normalize_template_provider_json(
+                serde_json::to_value(seed).unwrap()
+            )),
+            without_empty_credentials(normalize_template_provider_json(
+                form.to_provider_json_value()
+            )),
+            "88API CLI/TUI parity for {app:?}"
+        );
+    }
+    let gemini =
+        build_provider_template_seed(&AppType::Gemini, ProviderAddTemplate::Api88, &[]).unwrap();
+    assert_eq!(
+        gemini.settings_config["env"]["GEMINI_MODEL"],
+        "gemini-3.8-flash"
+    );
+    let opencode =
+        build_provider_template_seed(&AppType::OpenCode, ProviderAddTemplate::Api88, &[]).unwrap();
+    assert_eq!(opencode.settings_config["npm"], "@ai-sdk/anthropic");
+    assert_eq!(
+        opencode.settings_config["models"]["claude-opus-5-5"]["limit"]["context"],
+        1000000
+    );
+}
+
+#[test]
+fn api88_claude_key_and_pi_catalog_survive_form_save() {
+    let mut claude = ProviderAddFormState::new(AppType::Claude);
+    claude.apply_template(template_index_by_label(AppType::Claude, "88API"), &[]);
+    claude.claude_api_key.set("test-api-key");
+    let saved = claude.to_provider_json_value();
+    assert_eq!(
+        saved["settingsConfig"]["env"]["ANTHROPIC_AUTH_TOKEN"],
+        "test-api-key"
+    );
+    assert!(saved["settingsConfig"]["env"]
+        .get("ANTHROPIC_API_KEY")
+        .is_none());
+    let mut pi = ProviderAddFormState::new(AppType::Pi);
+    pi.apply_template(template_index_by_label(AppType::Pi, "88API"), &[]);
+    let saved = pi.to_provider_json_value();
+    assert_eq!(saved["id"], "cc-switch-88api");
+    assert_eq!(saved["settingsConfig"]["baseUrl"], "https://api.88api.ai");
+    assert_eq!(saved["settingsConfig"]["api"], "anthropic-messages");
+    assert_eq!(
+        saved["settingsConfig"]["models"].as_array().unwrap().len(),
+        4
+    );
+    assert_eq!(
+        saved["settingsConfig"]["models"][0]["id"],
+        "claude-opus-5-5"
+    );
+    assert_eq!(
+        crate::provider_preset_sponsors::API88.register_url,
+        "https://88api.ai/sign-up?aff=TeNl"
     );
 }

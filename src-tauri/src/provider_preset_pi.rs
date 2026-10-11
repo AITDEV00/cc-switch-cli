@@ -121,7 +121,29 @@ pub(crate) static PI_BUILTIN_PROVIDER_PRESETS: [PiProviderPreset; 9] = [
     },
 ];
 
-pub(crate) static PI_SPONSOR_PROVIDER_PRESETS: [PiProviderPreset; 6] = [
+pub(crate) static PI_SPONSOR_PROVIDER_PRESETS: [PiProviderPreset; 7] = [
+    PiProviderPreset {
+        label: "88API",
+        provider_key: "cc-switch-88api",
+        website_url: "https://88api.ai",
+        category: "aggregator",
+        icon: "88api",
+        icon_color: None,
+        partner_promotion_key: Some("88api"),
+        sponsor_id: Some("88api"),
+        settings: api88_settings,
+    },
+    PiProviderPreset {
+        label: "Cubence",
+        provider_key: "cc-switch-cubence",
+        website_url: "https://cubence.com",
+        category: "third_party",
+        icon: "cubence",
+        icon_color: Some("#000000"),
+        partner_promotion_key: None,
+        sponsor_id: Some("cubence"),
+        settings: cubence_settings,
+    },
     PiProviderPreset {
         label: "PackyCode",
         provider_key: "cc-switch-packy-code",
@@ -132,28 +154,6 @@ pub(crate) static PI_SPONSOR_PROVIDER_PRESETS: [PiProviderPreset; 6] = [
         partner_promotion_key: None,
         sponsor_id: Some("packycode"),
         settings: packycode_settings,
-    },
-    PiProviderPreset {
-        label: "AICodeMirror",
-        provider_key: "cc-switch-aicode-mirror",
-        website_url: "https://www.aicodemirror.ai",
-        category: "third_party",
-        icon: "aicodemirror",
-        icon_color: Some("#000000"),
-        partner_promotion_key: None,
-        sponsor_id: Some("aicodemirror"),
-        settings: aicodemirror_settings,
-    },
-    PiProviderPreset {
-        label: "FennoAI",
-        provider_key: "cc-switch-fenno-ai",
-        website_url: "https://api.fenno.ai",
-        category: "aggregator",
-        icon: "fenno",
-        icon_color: None,
-        partner_promotion_key: None,
-        sponsor_id: Some("fenno"),
-        settings: fenno_settings,
     },
     PiProviderPreset {
         label: "RunAPI",
@@ -167,6 +167,17 @@ pub(crate) static PI_SPONSOR_PROVIDER_PRESETS: [PiProviderPreset; 6] = [
         settings: runapi_settings,
     },
     PiProviderPreset {
+        label: "AICodeMirror",
+        provider_key: "cc-switch-aicode-mirror",
+        website_url: "https://www.aicodemirror.ai",
+        category: "third_party",
+        icon: "aicodemirror",
+        icon_color: Some("#000000"),
+        partner_promotion_key: None,
+        sponsor_id: Some("aicodemirror"),
+        settings: aicodemirror_settings,
+    },
+    PiProviderPreset {
         label: "Qiniu",
         provider_key: "cc-switch-qiniu",
         website_url: "https://s.qiniu.com/nMvAvy",
@@ -178,15 +189,15 @@ pub(crate) static PI_SPONSOR_PROVIDER_PRESETS: [PiProviderPreset; 6] = [
         settings: qiniu_settings,
     },
     PiProviderPreset {
-        label: "Cubence",
-        provider_key: "cc-switch-cubence",
-        website_url: "https://cubence.com",
-        category: "third_party",
-        icon: "cubence",
-        icon_color: Some("#000000"),
+        label: "FennoAI",
+        provider_key: "cc-switch-fenno-ai",
+        website_url: "https://api.fenno.ai",
+        category: "aggregator",
+        icon: "fenno",
+        icon_color: None,
         partner_promotion_key: None,
-        sponsor_id: Some("cubence"),
-        settings: cubence_settings,
+        sponsor_id: Some("fenno"),
+        settings: fenno_settings,
     },
 ];
 
@@ -569,12 +580,13 @@ mod tests {
                 .map(|preset| preset.sponsor_id.expect("sponsor id"))
                 .collect::<Vec<_>>(),
             [
-                "packycode",
-                "aicodemirror",
-                "fenno",
-                "runapi",
-                "qiniu",
+                "88api",
                 "cubence",
+                "packycode",
+                "runapi",
+                "aicodemirror",
+                "qiniu",
+                "fenno"
             ]
         );
     }
@@ -597,4 +609,8 @@ mod tests {
                 .is_some_and(|items| !items.is_empty()));
         }
     }
+}
+
+fn api88_settings() -> Value {
+    crate::provider_preset_sponsors::api88_settings(&crate::app_config::AppType::Pi)
 }
