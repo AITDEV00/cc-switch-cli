@@ -98,6 +98,17 @@ pub struct Provider {
 }
 
 impl Provider {
+    /// Whether the provider form's "auth field" was explicitly set to
+    /// ANTHROPIC_API_KEY. The form only persists `meta.apiKeyField` for the
+    /// non-default choice, so `None` means the default ANTHROPIC_AUTH_TOKEN.
+    pub fn claude_uses_api_key_field(&self) -> bool {
+        self.meta
+            .as_ref()
+            .and_then(|m| m.api_key_field.as_deref())
+            .map(|field| field.eq_ignore_ascii_case("ANTHROPIC_API_KEY"))
+            .unwrap_or(false)
+    }
+
     /// 从现有ID创建供应商
     pub fn with_id(
         id: String,

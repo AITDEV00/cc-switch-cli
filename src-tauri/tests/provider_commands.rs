@@ -1703,8 +1703,9 @@ fn switch_provider_updates_claude_live_and_state() {
         .get("old-provider")
         .expect("legacy provider still exists");
     assert_eq!(
-        legacy_provider.settings_config, legacy_live,
-        "previous provider should receive backfilled live config"
+        legacy_provider.settings_config,
+        json!({"env":{"ANTHROPIC_API_KEY":"stale-key"}}),
+        "switching must not backfill live settings into provider rows"
     );
 
     let new_provider = manager
@@ -1948,8 +1949,8 @@ async fn switch_provider_under_takeover_refreshes_claude_restore_backup_to_selec
             .get("env")
             .and_then(|env| env.get("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"))
             .and_then(|value| value.as_str()),
-        Some("1"),
-        "selected-provider restore backup should use normal Claude common snippet semantics"
+        None,
+        "switching must not replay saved common settings"
     );
 
     let failover_snapshot = state
@@ -1965,8 +1966,8 @@ async fn switch_provider_under_takeover_refreshes_claude_restore_backup_to_selec
             .get("env")
             .and_then(|env| env.get("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"))
             .and_then(|value| value.as_str()),
-        Some("1"),
-        "takeover-time switch should generate a provider snapshot with normal Claude common snippet semantics"
+        None,
+        "switching must not replay saved common settings"
     );
 
     state

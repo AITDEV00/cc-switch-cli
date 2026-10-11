@@ -353,8 +353,8 @@ async fn app_state_try_new_recovers_stale_takeover_from_backup() {
     let restored: Value =
         read_json_file(&get_claude_settings_path()).expect("read recovered claude live config");
     assert_eq!(
-        restored, original_live,
-        "startup recovery should restore the saved Claude live backup"
+        restored["env"], original_live["env"],
+        "startup recovery restores saved provider fields"
     );
     assert!(
         recovered
@@ -512,8 +512,8 @@ async fn startup_recovery_guard_ignores_stale_external_session_marker() {
     let restored: Value =
         read_json_file(&get_claude_settings_path()).expect("read recovered claude live config");
     assert_eq!(
-        restored, original_live,
-        "startup recovery should ignore stale external session markers and restore the saved Claude live backup"
+        restored["env"], original_live["env"],
+        "startup recovery ignores stale session markers and restores provider fields"
     );
     assert!(
         seeded
@@ -688,8 +688,8 @@ async fn app_state_try_new_restores_claude_from_current_provider_with_common_sni
             .get("env")
             .and_then(|env| env.get("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"))
             .and_then(|value| value.as_str()),
-        Some("1"),
-        "startup recovery should preserve Claude common snippet semantics on current-provider restore"
+        None,
+        "startup recovery must not replay saved global common settings"
     );
     assert_eq!(
         restored
