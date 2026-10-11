@@ -21,7 +21,7 @@ English | [中文](README_ZH.md) | [日本語](README_JA.md)
 
 ## 📖 About
 
-This project is a **CLI fork** of [CC-Switch](https://github.com/farion1231/cc-switch). 
+This project is a **CLI fork** of [CC-Switch](https://github.com/farion1231/cc-switch).
 
 🔄 The WebDAV sync feature is fully compatible with the upstream project.
 
@@ -32,25 +32,11 @@ This project is a **CLI fork** of [CC-Switch](https://github.com/farion1231/cc-s
 
 ## ❤️ Sponsor
 
-[![AICodeMirror](assets/partners/banners/aicodemirror.png)](https://www.aicodemirror.ai/register?invitecode=77V9EA)
-
-Thanks to **AICodeMirror** for sponsoring this project! AICodeMirror provides highly reliable official relay services for Claude, Codex, and Gemini, supporting enterprise-grade concurrency, fast invoice issuance, and dedicated 24/7 technical support. Official Codex access is available for as little as **7% of the standard price**, with additional discounts on account top-ups!
-
-AICodeMirror also offers an exclusive benefit to users of the CC-Switch CLI project: register through [this link](https://www.aicodemirror.ai/register?invitecode=77V9EA) to receive **20% off your first top-up**.
-
----
-
 <table>
   <tr>
-    <td width="180">
-      <a href="https://console.apito.ai/agent/register/Bsi9NDlWGpkPoAii">
-        <img src="assets/partners/logos/claudeapi.png" alt="ClaudeAPI" width="150">
-      </a>
-    </td>
-    <td>
-      Thanks to <b>ClaudeAPI</b> for supporting this project! <b>ClaudeAPI</b> is a Claude-focused API access provider built on official and AWS channels, offering high stability, low latency, and full support for Claude Code, Codex, Agent workflows, and enterprise use cases. It also supports business onboarding, team usage management, and invoicing. Exclusive offer for CC-Switch CLI users: register via this <a href="https://console.apito.ai/agent/register/Bsi9NDlWGpkPoAii">exclusive link</a> to receive free trial credits and get started with Claude Code instantly.
-    </td>
-  </tr>
+<td width="180"><a href="https://88api.ai/sign-up?aff=TeNl"><img src="assets/partners/logos/88api-banner-en.jpg" alt="88API" width="150"></a></td>
+<td>Thanks to 88API Token Aggregation Platform for sponsoring this project! 88API is a one-stop multi-model API platform operated by a Hong Kong company, built mainly for developers, creators and AI application users. A unified interface gives access to text, image, speech and video models, covering common workflows such as AI coding, smart translation, content creation, voice-over, image generation and video generation. You can add it as a provider and switch to it right inside CC-Switch CLI. 88API supports major international payment methods, can issue invoices, and provides enterprise-grade stable service. Register via <a href="https://88api.ai/sign-up?aff=TeNl">this link</a> to receive exclusive bonus credits!</td>
+</tr>
   <tr>
     <td width="180">
       <a href="https://pateway.ai/?ch=18fxbjo">
@@ -83,28 +69,8 @@ AICodeMirror also offers an exclusive benefit to users of the CC-Switch CLI proj
       One API, every top model! <a href="https://www.openmodel.ai/?ref=JGDNqZl8"><b>OpenModel</b></a> is a production-grade, high-availability AI API gateway that makes your applications truly fast and stable: automatic failover, smart routing to the best-performing channel, and a production-grade SLA. An SLA that far surpasses any single provider — making stability your core competitive advantage. Works directly with Claude Code, Codex, and Gemini CLI. Register via <a href="https://www.openmodel.ai/?ref=JGDNqZl8">this link</a> to get started.
     </td>
   </tr>
-  <tr>
-    <td width="180">
-      <a href="https://s.qiniu.com/FVfiEb">
-        <img src="assets/partners/logos/qiniuyun.png" alt="Qiniu Cloud AI" width="150">
-      </a>
-    </td>
-    <td>
-      Thanks to <b>Qiniu Cloud AI</b> for sponsoring this project! <b>Qiniu Cloud AI</b> is an enterprise-grade large-model MaaS platform from <b>Qiniu Cloud (HKEX: 02567)</b>, offering one-stop access to 150+ mainstream models worldwide, compatibility with the protocols of major global model vendors, and full-modality coverage across text, image, audio, video, and file processing — serving over <b>1.69 million</b> enterprise and developer users. <br/>
-      Exclusive benefits: enterprise users can claim <b>12 million free tokens</b>, and referring friends can earn up to <b>tens of billions of tokens</b>. Register via <a href="https://s.qiniu.com/FVfiEb">this link</a>.
-    </td>
-  </tr>
-  <tr>
-    <td width="180">
-      <a href="https://api.fenno.ai/register?redirect=/purchase?tab=subscription%26group=16&aff=Z6XB52KCVP6Y">
-        <img src="assets/partners/logos/fennoai.png" alt="Fenno.ai" width="150">
-      </a>
-    </td>
-    <td>
-      Thanks to <b>Fenno.ai</b> for sponsoring this project! Fenno.ai is a stable, efficient API relay provider currently focused on Codex relay. It is compatible with both the OpenAI and Anthropic protocols and plugs smoothly into mainstream coding tools such as Codex, Claude Code, and OpenCode, reliably sustaining enterprise workloads of hundreds of billions of tokens per day, with corporate (B2B) settlement and invoicing for both domestic and overseas entities. <br/>
-      Exclusive benefit for CC-Switch CLI users: register via <a href="https://api.fenno.ai/register?redirect=/purchase?tab=subscription%26group=16&aff=Z6XB52KCVP6Y">this link</a> to subscribe to a great-value Coding Plan — <b>¥9.9 for $150 of credit</b> — and earn up to a <b>20% reward</b> for referrals; the more you invite, the more you get!
-    </td>
-  </tr>
+
+
   <tr>
     <td width="180">
       <a href="https://www.packyapi.com/register?aff=cc-switch-cli">
