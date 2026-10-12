@@ -316,10 +316,13 @@ Manage ChatGPT/Codex OAuth accounts locally and reuse them across provider profi
 ```bash
 cc-switch auth status                # Show managed account status
 cc-switch auth login                 # Sign in with ChatGPT/Codex OAuth
+cc-switch auth login --account-id <id> # Reauthenticate an existing account, preserving bindings
 cc-switch auth list                  # List signed-in accounts
 cc-switch auth default <account-id>  # Set the default account
 cc-switch auth remove <account-id>   # Remove an account
 ```
+
+Members of the same ChatGPT workspace have separate local account IDs. Managed accounts saved by older versions require reauthentication: find the ID with `cc-switch auth list`, then run `cc-switch auth login --account-id <id>`, or choose **Reauthenticate** in the TUI account menu. Sign in as the original user in the same workspace to preserve provider bindings.
 
 ### 🛠️ MCP Server Management
 

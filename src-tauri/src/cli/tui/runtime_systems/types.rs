@@ -585,6 +585,7 @@ pub(crate) enum ManagedAuthReq {
     },
     StartLogin {
         auth_provider: String,
+        account_id: Option<String>,
     },
     PollLogin {
         auth_provider: String,

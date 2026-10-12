@@ -24,6 +24,9 @@ pub enum AuthCommand {
     },
     /// Sign in to ChatGPT with the Codex OAuth device flow
     Login {
+        /// Reauthenticate this local account while preserving provider bindings
+        #[arg(long)]
+        account_id: Option<String>,
         /// Print machine-readable JSON
         #[arg(long)]
         json: bool,
@@ -77,7 +80,7 @@ pub fn execute(cmd: AuthCommand) -> Result<(), AppError> {
     match cmd {
         AuthCommand::Status { json } => status(&runtime, json),
         AuthCommand::List { json } => list_accounts(&runtime, json),
-        AuthCommand::Login { json } => login(&runtime, json),
+        AuthCommand::Login { json, account_id } => login(&runtime, json, account_id.as_deref()),
         AuthCommand::Default { account_id } => set_default(&runtime, &account_id),
         AuthCommand::Remove { account_id, yes } => remove_account(&runtime, &account_id, yes),
         AuthCommand::Logout { yes } => logout(&runtime, yes),
@@ -158,9 +161,16 @@ fn list_accounts(runtime: &tokio::runtime::Runtime, json: bool) -> Result<(), Ap
     Ok(())
 }
 
-fn login(runtime: &tokio::runtime::Runtime, json: bool) -> Result<(), AppError> {
+fn login(
+    runtime: &tokio::runtime::Runtime,
+    json: bool,
+    account_id: Option<&str>,
+) -> Result<(), AppError> {
     let device = runtime
-        .block_on(AuthService::start_login(AUTH_PROVIDER_CODEX_OAUTH))
+        .block_on(AuthService::start_login_for_account(
+            AUTH_PROVIDER_CODEX_OAUTH,
+            account_id,
+        ))
         .map_err(AppError::Message)?;
 
     if json {
@@ -310,13 +320,25 @@ fn print_device_instructions(device: &ManagedAuthDeviceCodeResponse) {
 
 fn print_accounts(accounts: &[ManagedAuthAccount]) {
     let mut table = create_table();
-    table.set_header(vec!["Default", "Login", "Account ID", "Authenticated At"]);
+    table.set_header(vec![
+        "Default",
+        "Login",
+        "Account ID",
+        "Authenticated At",
+        "Status",
+    ]);
     for account in accounts {
         table.add_row(vec![
             if account.is_default { "yes" } else { "" }.to_string(),
             account.login.clone(),
             account.id.clone(),
             account.authenticated_at.to_string(),
+            if account.reauth_required {
+                "Reauthentication required"
+            } else {
+                "Ready"
+            }
+            .to_string(),
         ]);
     }
     println!("{table}");

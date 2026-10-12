@@ -122,14 +122,18 @@ impl CodexOAuthService {
         *guard = None;
     }
 
-    pub async fn start_device_flow() -> Result<ManagedAuthDeviceCodeResponse, CodexOAuthError> {
-        Self::manager().start_device_flow().await
+    pub async fn start_device_flow(
+        target_account_id: Option<&str>,
+    ) -> Result<ManagedAuthDeviceCodeResponse, CodexOAuthError> {
+        Self::manager().start_device_flow(target_account_id).await
     }
 
     pub async fn poll_for_token(
         device_code: &str,
     ) -> Result<Option<ManagedAuthAccount>, CodexOAuthError> {
-        Self::manager().poll_for_token(device_code).await
+        Self::manager()
+            .poll_for_token(device_code, || async {})
+            .await
     }
 
     pub async fn get_valid_token_for_account(account_id: &str) -> Result<String, CodexOAuthError> {
@@ -189,9 +193,19 @@ impl CodexOAuthService {
             }
         };
 
+        let workspace = match manager.chatgpt_account_id_for_account(&account_id).await {
+            Ok(workspace) => workspace,
+            Err(error) => {
+                return SubscriptionQuota::error(
+                    "codex_oauth",
+                    CredentialStatus::Expired,
+                    error.to_string(),
+                )
+            }
+        };
         query_codex_quota(
             &token,
-            Some(&account_id),
+            Some(&workspace),
             "codex_oauth",
             "Codex OAuth access token expired or rejected. Please re-login via cc-switch.",
         )
@@ -220,9 +234,13 @@ impl CodexOAuthService {
             .await
             .map_err(|error| format!("Codex OAuth token unavailable: {error}"))?;
 
+        let workspace = manager
+            .chatgpt_account_id_for_account(&account_id)
+            .await
+            .map_err(|e| e.to_string())?;
         crate::services::subscription::consume_codex_reset_credit(
             &token,
-            Some(&account_id),
+            Some(&workspace),
             credit_id,
             "codex_oauth",
         )
@@ -250,7 +268,11 @@ impl CodexOAuthService {
             .await
             .map_err(|error| format!("Codex OAuth token unavailable: {error}"))?;
 
-        crate::services::codex_oauth_models::fetch_models_with_token(&token, &account_id).await
+        let workspace = manager
+            .chatgpt_account_id_for_account(&account_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        crate::services::codex_oauth_models::fetch_models_with_token(&token, &workspace).await
     }
 
     #[cfg(test)]

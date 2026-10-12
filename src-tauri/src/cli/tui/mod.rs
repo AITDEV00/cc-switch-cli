@@ -2220,6 +2220,7 @@ fn cache_invalidation_for_action(action: &Action) -> CacheInvalidation {
         | Action::UsageLogDetailRefresh { .. }
         | Action::ManagedAuthRefresh { .. }
         | Action::ManagedAuthStartLogin { .. }
+        | Action::ManagedAuthCancelLogin { .. }
         | Action::ManagedAuthSetDefault { .. }
         | Action::ManagedAuthRemove { .. }
         | Action::SkillsInstall { .. }

@@ -96,6 +96,7 @@ mod tests {
             migration_error: None,
             accounts: vec![
                 crate::services::ManagedAuthAccount {
+                    reauth_required: false,
                     id: "acc-default".to_string(),
                     provider: "codex_oauth".to_string(),
                     login: "default@example.com".to_string(),
@@ -104,6 +105,7 @@ mod tests {
                     is_default: true,
                 },
                 crate::services::ManagedAuthAccount {
+                    reauth_required: false,
                     id: "acc-alt".to_string(),
                     provider: "codex_oauth".to_string(),
                     login: "alt@example.com".to_string(),
@@ -10677,13 +10679,13 @@ mod tests {
         let action = app.on_key(key(KeyCode::Enter), &UiData::default());
         assert!(matches!(
             action,
-            Action::ManagedAuthStartLogin { auth_provider } if auth_provider == "codex_oauth"
+            Action::ManagedAuthStartLogin { auth_provider, .. } if auth_provider == "codex_oauth"
         ));
 
         let action = app.on_key(key(KeyCode::Char('a')), &UiData::default());
         assert!(matches!(
             action,
-            Action::ManagedAuthStartLogin { auth_provider } if auth_provider == "codex_oauth"
+            Action::ManagedAuthStartLogin { auth_provider, .. } if auth_provider == "codex_oauth"
         ));
 
         app.managed_auth_status = Some(managed_auth_status());
@@ -10711,6 +10713,22 @@ mod tests {
                 selected: 0,
             } if auth_provider == "codex_oauth" && account_id == "acc-alt"
         ));
+    }
+
+    #[test]
+    fn managed_account_menu_can_reauthenticate_selected_id() {
+        let mut app = App::new(Some(AppType::Claude));
+        app.overlay = Overlay::ManagedAccountActionPicker {
+            auth_provider: "codex_oauth".into(),
+            account_id: "local-member".into(),
+            selected: 0,
+        };
+        app.on_key(key(KeyCode::Down), &UiData::default());
+        app.on_key(key(KeyCode::Down), &UiData::default());
+        let action = app.on_key(key(KeyCode::Enter), &UiData::default());
+        assert!(
+            matches!(action, Action::ManagedAuthStartLogin { account_id: Some(id), .. } if id == "local-member")
+        );
     }
 
     #[test]
@@ -10761,7 +10779,9 @@ mod tests {
         let action = app.on_key(key(KeyCode::Esc), &UiData::default());
         assert!(matches!(action, Action::None));
         let action = app.on_key(key(KeyCode::Enter), &UiData::default());
-        assert!(matches!(action, Action::None));
+        assert!(
+            matches!(action, Action::ManagedAuthCancelLogin { device_code } if device_code == managed_auth_device().device_code)
+        );
         assert!(app.managed_auth_login.is_none());
         assert!(matches!(app.overlay, Overlay::None));
         assert!(matches!(
@@ -10777,6 +10797,7 @@ mod tests {
                 auth_provider: "codex_oauth".to_string(),
                 device_code: "device-1".to_string(),
                 result: Ok(Some(crate::services::ManagedAuthAccount {
+                    reauth_required: false,
                     id: "acc-new".to_string(),
                     provider: "codex_oauth".to_string(),
                     login: "new@example.com".to_string(),

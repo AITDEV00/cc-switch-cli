@@ -169,8 +169,14 @@ impl App {
                     ConfirmAction::UsageQueryNotice => Action::ConfirmUsageQueryNotice,
                     ConfirmAction::RebuildCodexUsage => Action::UsageRebuildCodex,
                     ConfirmAction::ManagedAuthCancelLogin => {
+                        let device_code = self
+                            .managed_auth_login
+                            .as_ref()
+                            .map(|login| login.device_code.clone());
                         self.cancel_managed_auth_login();
-                        Action::None
+                        device_code
+                            .map(|device_code| Action::ManagedAuthCancelLogin { device_code })
+                            .unwrap_or(Action::None)
                     }
                     ConfirmAction::ProxyEnableAndAutoFailover { app_type } => {
                         Action::EnableProxyAndAutoFailover {

@@ -433,6 +433,7 @@ pub(super) fn managed_auth_refresh(
 pub(super) fn managed_auth_start_login(
     ctx: &mut RuntimeActionContext<'_>,
     auth_provider: String,
+    account_id: Option<String>,
 ) -> Result<(), AppError> {
     let Some(tx) = ctx.managed_auth_req_tx else {
         ctx.app.push_toast(
@@ -445,7 +446,10 @@ pub(super) fn managed_auth_start_login(
     };
 
     ctx.app.managed_auth_loading = true;
-    if let Err(err) = tx.send(ManagedAuthReq::StartLogin { auth_provider }) {
+    if let Err(err) = tx.send(ManagedAuthReq::StartLogin {
+        auth_provider,
+        account_id,
+    }) {
         ctx.app.managed_auth_loading = false;
         ctx.app.push_toast(
             texts::tui_toast_managed_auth_request_failed(&err.to_string()),

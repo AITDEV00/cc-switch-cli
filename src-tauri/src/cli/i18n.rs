@@ -4038,6 +4038,22 @@ pub mod texts {
         }
     }
 
+    pub fn tui_managed_auth_reauthenticate() -> &'static str {
+        if is_chinese() {
+            "重新认证"
+        } else {
+            "Reauthenticate"
+        }
+    }
+
+    pub fn tui_managed_auth_reauth_required() -> &'static str {
+        if is_chinese() {
+            "需要重新认证"
+        } else {
+            "Reauthentication required"
+        }
+    }
+
     pub fn tui_key_set_default() -> &'static str {
         if is_chinese() {
             "设为默认"

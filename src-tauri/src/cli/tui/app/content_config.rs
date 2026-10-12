@@ -1290,6 +1290,7 @@ impl App {
         }
 
         Action::ManagedAuthStartLogin {
+            account_id: None,
             auth_provider: "codex_oauth".to_string(),
         }
     }
@@ -1330,6 +1331,7 @@ impl App {
         }
 
         Action::ManagedAuthStartLogin {
+            account_id: None,
             auth_provider: "codex_oauth".to_string(),
         }
     }
