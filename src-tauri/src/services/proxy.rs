@@ -493,6 +493,15 @@ impl ProxyService {
     }
 
     async fn should_drop_takeover_via_daemon(&self, app_type: &AppType) -> Result<bool, String> {
+        // The daemon owns its workers even when the persisted runtime marker
+        // is missing or stale. Let DropTakeover resolve authoritative state;
+        // its transport handling falls back locally only for an absent daemon
+        // and propagates other errors instead of reporting a false success.
+        #[cfg(unix)]
+        if crate::daemon::paths::socket_path().exists() {
+            return Ok(true);
+        }
+
         let Some(session) = self.load_persisted_runtime_session_for_app(app_type) else {
             self.remove_stale_daemon_socket_if_unreachable();
             return Ok(false);
