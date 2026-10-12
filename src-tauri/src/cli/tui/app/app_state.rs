@@ -156,6 +156,10 @@ pub enum Action {
     },
     ManagedAuthStartLogin {
         auth_provider: String,
+        account_id: Option<String>,
+    },
+    ManagedAuthCancelLogin {
+        device_code: String,
     },
     ManagedAuthSetDefault {
         auth_provider: String,

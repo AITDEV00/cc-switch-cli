@@ -1125,8 +1125,19 @@ pub(crate) fn handle_action(
         Action::ManagedAuthRefresh { auth_provider } => {
             settings::managed_auth_refresh(&mut ctx, auth_provider)
         }
-        Action::ManagedAuthStartLogin { auth_provider } => {
-            settings::managed_auth_start_login(&mut ctx, auth_provider)
+        Action::ManagedAuthStartLogin {
+            auth_provider,
+            account_id,
+        } => settings::managed_auth_start_login(&mut ctx, auth_provider, account_id),
+        Action::ManagedAuthCancelLogin { device_code } => {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| AppError::Message(e.to_string()))?;
+            rt.block_on(
+                crate::services::CodexOAuthService::manager().cancel_device_flow(&device_code),
+            );
+            Ok(())
         }
         Action::ManagedAuthSetDefault {
             auth_provider,

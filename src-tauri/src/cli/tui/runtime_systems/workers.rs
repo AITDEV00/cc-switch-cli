@@ -707,10 +707,12 @@ fn managed_auth_worker_loop(rx: mpsc::Receiver<ManagedAuthReq>, tx: mpsc::Sender
                         auth_provider,
                         result: Err(err.clone()),
                     },
-                    ManagedAuthReq::StartLogin { auth_provider } => ManagedAuthMsg::LoginStarted {
-                        auth_provider,
-                        result: Err(err.clone()),
-                    },
+                    ManagedAuthReq::StartLogin { auth_provider, .. } => {
+                        ManagedAuthMsg::LoginStarted {
+                            auth_provider,
+                            result: Err(err.clone()),
+                        }
+                    }
                     ManagedAuthReq::PollLogin {
                         auth_provider,
                         device_code,
@@ -751,8 +753,14 @@ fn managed_auth_worker_loop(rx: mpsc::Receiver<ManagedAuthReq>, tx: mpsc::Sender
                     result,
                 });
             }
-            ManagedAuthReq::StartLogin { auth_provider } => {
-                let result = rt.block_on(crate::services::AuthService::start_login(&auth_provider));
+            ManagedAuthReq::StartLogin {
+                auth_provider,
+                account_id,
+            } => {
+                let result = rt.block_on(crate::services::AuthService::start_login_for_account(
+                    &auth_provider,
+                    account_id.as_deref(),
+                ));
                 let _ = tx.send(ManagedAuthMsg::LoginStarted {
                     auth_provider,
                     result,

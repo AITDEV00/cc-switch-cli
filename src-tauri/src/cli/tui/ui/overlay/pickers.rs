@@ -861,6 +861,7 @@ pub(super) fn render_managed_account_action_picker_overlay(
     let actions = [
         texts::tui_key_set_default().to_string(),
         texts::tui_key_delete().to_string(),
+        texts::tui_managed_auth_reauthenticate().to_string(),
     ];
 
     let body = overlay_frame(
@@ -887,7 +888,7 @@ pub(super) fn render_managed_account_action_picker_overlay(
         .highlight_style(selection_style(theme))
         .highlight_symbol(highlight_symbol(theme));
     let mut state = ListState::default();
-    state.select(Some(selected.min(1)));
+    state.select(Some(selected.min(2)));
     frame.render_stateful_widget(list, body, &mut state);
 }
 

@@ -4074,6 +4074,7 @@ fn managed_auth_status() -> crate::services::ManagedAuthStatus {
         migration_error: None,
         accounts: vec![
             crate::services::ManagedAuthAccount {
+                reauth_required: false,
                 id: "acc-default".to_string(),
                 provider: "codex_oauth".to_string(),
                 login: "default@example.com".to_string(),
@@ -4082,6 +4083,7 @@ fn managed_auth_status() -> crate::services::ManagedAuthStatus {
                 is_default: true,
             },
             crate::services::ManagedAuthAccount {
+                reauth_required: false,
                 id: "acc-alt".to_string(),
                 provider: "codex_oauth".to_string(),
                 login: "alt@example.com".to_string(),

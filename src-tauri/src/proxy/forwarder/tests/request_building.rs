@@ -2366,3 +2366,41 @@ fn request_body_json(request: &reqwest::Request) -> Value {
         .expect("request should have JSON body bytes");
     serde_json::from_slice(bytes).expect("parse request JSON body")
 }
+
+#[tokio::test]
+async fn codex_oauth_shared_workspace_uses_bound_members_token_and_workspace_header() {
+    let _lock = lock_test_home_and_settings();
+    let _guard = CodexOAuthService::test_empty_manager().await.unwrap();
+    let manager = CodexOAuthService::manager();
+    for (id, token) in [("local-a", "token-a"), ("local-b", "token-b")] {
+        let id_token = crate::codex_config::test_codex_id_token(id);
+        manager
+            .add_test_account_with_workspace_and_access_token(
+                id,
+                "shared-workspace",
+                token,
+                Some(&id_token),
+            )
+            .await
+            .unwrap();
+    }
+    manager.set_default_account("local-b").await.unwrap();
+    for (id, token) in [("local-a", "Bearer token-a"), ("local-b", "Bearer token-b")] {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "authorization",
+            HeaderValue::from_static("Bearer other-member"),
+        );
+        headers.insert(
+            "chatgpt-account-id",
+            HeaderValue::from_static("wrong-workspace"),
+        );
+        let request =
+            build_request(&AppType::Claude, &codex_oauth_provider(Some(id)), headers).await;
+        assert_eq!(header_value(&request, "authorization"), Some(token));
+        assert_eq!(
+            header_value(&request, "chatgpt-account-id"),
+            Some("shared-workspace")
+        );
+    }
+}

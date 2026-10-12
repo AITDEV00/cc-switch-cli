@@ -318,10 +318,13 @@ cc-switch provider export <id> --output ~/.claude/settings-demo.json # 自定义
 ```bash
 cc-switch auth status                # 查看托管账号状态
 cc-switch auth login                 # 使用 ChatGPT/Codex OAuth 登录
+cc-switch auth login --account-id <id> # 重新认证已有账号，保留供应商绑定
 cc-switch auth list                  # 列出已登录账号
 cc-switch auth default <account-id>  # 设置默认账号
 cc-switch auth remove <account-id>   # 移除账号
 ```
+
+同一 ChatGPT workspace 的不同成员使用独立的本地账号 ID。旧版托管账号升级后需要重新认证：运行 `cc-switch auth list` 获取 ID，再执行 `cc-switch auth login --account-id <id>`；也可以在 TUI 的账号操作菜单选择「重新认证」。请登录原账号对应的 workspace 和用户，原有供应商绑定会保留。
 
 ### 🛠️ MCP 服务器管理
 

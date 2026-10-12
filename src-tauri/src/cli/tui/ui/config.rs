@@ -3873,6 +3873,13 @@ fn managed_account_list_item(
         ));
     }
 
+    if account.reauth_required {
+        title_spans.push(Span::raw(format!(
+            "  {}",
+            texts::tui_managed_auth_reauth_required()
+        )));
+    }
+
     ListItem::new(vec![
         Line::from(title_spans),
         Line::from(vec![

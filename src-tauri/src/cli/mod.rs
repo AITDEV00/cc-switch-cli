@@ -702,11 +702,19 @@ mod tests {
         let cli = Cli::parse_from(["cc-switch", "auth", "login", "--json"]);
 
         match cli.command {
-            Some(Commands::Auth(super::commands::auth::AuthCommand::Login { json })) => {
+            Some(Commands::Auth(super::commands::auth::AuthCommand::Login { json, .. })) => {
                 assert!(json);
             }
             _ => panic!("expected auth login command"),
         }
+    }
+
+    #[test]
+    fn parses_auth_targeted_reauthentication() {
+        let cli = Cli::parse_from(["cc-switch", "auth", "login", "--account-id", "local-user"]);
+        assert!(
+            matches!(cli.command, Some(Commands::Auth(super::commands::auth::AuthCommand::Login { account_id: Some(id), .. })) if id == "local-user")
+        );
     }
 
     #[test]

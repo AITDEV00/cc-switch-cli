@@ -816,7 +816,7 @@ impl App {
             return None;
         };
 
-        *selected = (*selected).min(1);
+        *selected = (*selected).min(2);
 
         Some(match key.code {
             KeyCode::Esc => {
@@ -828,7 +828,7 @@ impl App {
                 Action::None
             }
             KeyCode::Down => {
-                *selected = (*selected + 1).min(1);
+                *selected = (*selected + 1).min(2);
                 Action::None
             }
             KeyCode::Enter => {
@@ -839,9 +839,13 @@ impl App {
                         auth_provider,
                         account_id,
                     },
-                    _ => Action::ManagedAuthRemove {
+                    1 => Action::ManagedAuthRemove {
                         auth_provider,
                         account_id,
+                    },
+                    _ => Action::ManagedAuthStartLogin {
+                        auth_provider,
+                        account_id: Some(account_id),
                     },
                 };
                 self.overlay = Overlay::None;
