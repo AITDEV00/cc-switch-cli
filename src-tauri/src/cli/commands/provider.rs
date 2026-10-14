@@ -12,7 +12,8 @@ use crate::cli::commands::provider_input::{
     display_provider_summary, generate_provider_id_for_app, prompt_basic_fields,
     prompt_optional_fields, prompt_settings_config, provider_uses_common_config,
     set_provider_common_config_meta, supports_common_config, validate_provider_add_template,
-    validate_provider_id_for_add, OptionalFields, ProviderAddTemplate, SettingsConfigPromptResult,
+    validate_provider_id_for_add, validate_provider_id_for_update, OptionalFields,
+    ProviderAddTemplate, SettingsConfigPromptResult,
 };
 use crate::cli::i18n::texts;
 use crate::cli::ui::{highlight, info, success, warning};
@@ -753,6 +754,9 @@ pub enum ProviderCommand {
         /// Enable Codex fast mode (codex-oauth template)
         #[arg(long)]
         fast_mode: bool,
+        /// Update the provider in place when the ID already exists (requires --id)
+        #[arg(long, requires = "id")]
+        overwrite: bool,
     },
     /// Edit a provider
     Edit {
@@ -874,6 +878,7 @@ pub fn execute(cmd: ProviderCommand, app: Option<AppType>) -> Result<(), AppErro
             common_config,
             account_id,
             fast_mode,
+            overwrite,
         } => add_provider(
             app_type,
             AddProviderArgs {
@@ -900,6 +905,7 @@ pub fn execute(cmd: ProviderCommand, app: Option<AppType>) -> Result<(), AppErro
                 common_config,
                 account_id,
                 fast_mode,
+                overwrite,
             },
         ),
         ProviderCommand::Edit { id } => edit_provider(app_type, &id),
@@ -1119,6 +1125,7 @@ struct AddProviderArgs {
     common_config: bool,
     account_id: Option<String>,
     fast_mode: bool,
+    overwrite: bool,
 }
 
 impl AddProviderArgs {
@@ -1303,10 +1310,15 @@ fn resolve_add_provider_id(
     explicit: Option<&str>,
     name: &str,
     existing_ids: &[String],
+    allow_existing: bool,
 ) -> Result<String, AppError> {
     match explicit.map(str::trim).filter(|s| !s.is_empty()) {
         Some(id) => {
-            validate_provider_id_for_add(app_type, id, existing_ids)?;
+            if allow_existing {
+                validate_provider_id_for_update(app_type, id)?;
+            } else {
+                validate_provider_id_for_add(app_type, id, existing_ids)?;
+            }
             Ok(id.to_string())
         }
         None => Ok(generate_provider_id_for_app(app_type, name, existing_ids)),
@@ -1592,7 +1604,13 @@ fn add_provider(app_type: AppType, args: AddProviderArgs) -> Result<(), AppError
 
     // 2. 构造供应商（自定义或基于模板）
     let mut provider = if template.is_custom() {
-        let id = resolve_add_provider_id(&app_type, args.id.as_deref(), &name, &existing_ids)?;
+        let id = resolve_add_provider_id(
+            &app_type,
+            args.id.as_deref(),
+            &name,
+            &existing_ids,
+            args.overwrite,
+        )?;
         let settings_config = build_add_settings_config(
             &app_type,
             &args,
@@ -1619,7 +1637,13 @@ fn add_provider(app_type: AppType, args: AddProviderArgs) -> Result<(), AppError
     } else {
         let mut provider = build_provider_from_add_template(&app_type, template, &existing_ids)?;
         provider.name = name.clone();
-        provider.id = resolve_add_provider_id(&app_type, args.id.as_deref(), &name, &existing_ids)?;
+        provider.id = resolve_add_provider_id(
+            &app_type,
+            args.id.as_deref(),
+            &name,
+            &existing_ids,
+            args.overwrite,
+        )?;
         if let Some(url) = non_empty(args.website_url.clone()) {
             provider.website_url = Some(url);
         }
@@ -1690,15 +1714,25 @@ fn add_provider(app_type: AppType, args: AddProviderArgs) -> Result<(), AppError
     // 4. 显示摘要并写入
     display_provider_summary(&provider, &app_type);
     let provider_id = provider.id.clone();
-    ProviderService::add(&state, app_type.clone(), provider)?;
-
-    println!(
-        "\n{}",
-        success(&texts::entity_added_success(
-            texts::entity_provider(),
-            &provider_id
-        ))
-    );
+    if args.overwrite && existing_ids.iter().any(|id| *id == provider_id) {
+        ProviderService::update(&state, app_type.clone(), provider)?;
+        println!(
+            "\n{}",
+            success(&texts::entity_updated_success(
+                texts::entity_provider(),
+                &provider_id
+            ))
+        );
+    } else {
+        ProviderService::add(&state, app_type.clone(), provider)?;
+        println!(
+            "\n{}",
+            success(&texts::entity_added_success(
+                texts::entity_provider(),
+                &provider_id
+            ))
+        );
+    }
 
     Ok(())
 }

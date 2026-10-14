@@ -3742,6 +3742,19 @@ pub fn validate_provider_id_for_add(
     Ok(())
 }
 
+/// Same charset rules as add, but an existing ID is expected: used by
+/// `provider add --overwrite` to update a provider in place.
+pub fn validate_provider_id_for_update(app_type: &AppType, id: &str) -> Result<(), AppError> {
+    let trimmed = id.trim();
+    if trimmed.is_empty() {
+        return Err(AppError::InvalidInput(
+            texts::provider_id_empty_error().to_string(),
+        ));
+    }
+    ProviderService::validate_provider_key_for_add(app_type, trimmed)?;
+    Ok(())
+}
+
 /// 收集基本字段：name, website_url
 pub fn prompt_basic_fields(
     current: Option<&Provider>,
