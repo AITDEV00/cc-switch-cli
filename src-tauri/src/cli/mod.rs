@@ -23,7 +23,7 @@ use crate::app_config::AppType;
 #[derive(Parser)]
 #[command(
     name = "cc-switch",
-    version,
+    version = "jya0-5.11.1",
     about = "All-in-One Assistant for Claude Code, Codex, Gemini & OpenCode CLI",
     long_about = "Unified management for Claude Code, Codex, Gemini, and OpenCode CLI provider configurations, MCP servers, skills, prompts, local proxy routes, and environment checks.\n\nRun without arguments to enter interactive mode."
 )]
